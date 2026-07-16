@@ -145,14 +145,16 @@ details.detail-box .inner{padding:0 12px 12px;}
 .hscore .hs-pen b{min-width:20px;text-align:center;font-size:18px;color:var(--primary);}
 .hscore .hs-step{width:38px;height:38px;border-radius:10px;font-size:20px;font-weight:800;line-height:1;padding:0;border:1.5px solid var(--line);background:#fff;color:#16202a;}
 /* クラブ選択の上の「○H ○打目」表示 */
-#strokeLabel{font-size:20px;font-weight:800;color:var(--primary);margin-bottom:2px;}
+#strokeLabel{font-size:26px;font-weight:800;color:var(--danger);margin-bottom:2px;}   /* 少し大きく赤字（要望G2） */
+/* 1打目からのクラブ・結果履歴（要望I3） */
+#strokeSeq{font-size:14px;font-weight:700;color:#344054;margin-bottom:6px;min-height:1.2em;line-height:1.5;}
 #strokeLabel .edit-tag{font-size:13px;color:var(--accent);margin-left:6px;}
 #strokeLabel.flash{animation:strokePop 1s ease;}
 @keyframes strokePop{
-  0%{color:var(--primary);transform:scale(1);}
+  0%{color:var(--danger);transform:scale(1);}
   25%{color:var(--warn);transform:scale(1.25);}
   60%{color:var(--warn);transform:scale(1.1);}
-  100%{color:var(--primary);transform:scale(1);}
+  100%{color:var(--danger);transform:scale(1);}
 }
 .r-ok{color:var(--primary);font-weight:800;}
 .r-tri{color:var(--warn);font-weight:800;}
@@ -265,6 +267,7 @@ td.hno{font-weight:800;background:#f9fafb;}
 
 <!-- ============ ゴルフ場編集 ============ -->
 <div class="screen" id="scrCourseEdit">
+  <div class="subtab-row" data-sub="course"></div>
   <div class="card">
     <h2 id="courseEditTitle">ゴルフ場の登録</h2>
     <label class="required">ゴルフ場名</label>
@@ -325,6 +328,7 @@ td.hno{font-weight:800;background:#f9fafb;}
 
   <div class="card">
     <div id="strokeLabel"></div>
+    <div id="strokeSeq"></div>
     <label class="required" style="margin-top:0;">クラブ</label>
     <div class="btn-grid" id="clubBtns"></div>
     <label class="required">結果</label>
@@ -556,7 +560,9 @@ function showScreen(id){
 }
 // ゴルフ場情報タブの下位タブ（新規登録／ゴルフ場マスタ／過去ラウンド）
 function renderCourseSubtabs(screenId){
-  const active=COURSE_SUBTABS.find(s=>s.screen===screenId);
+  // 登録フォーム（scrCourseEdit）でも下位タブを常時表示し「新規登録」を反転（要望D2）
+  const mapped=(screenId==="scrCourseEdit")?"scrCourseSelect":screenId;
+  const active=COURSE_SUBTABS.find(s=>s.screen===mapped);
   document.querySelectorAll('.subtab-row[data-sub="course"]').forEach(row=>{
     row.innerHTML=COURSE_SUBTABS.map(s=>
       `<button type="button" class="subtab${active&&s.key===active.key?" active":""}" onclick="goCourseSub('${s.key}')">${esc(s.label)}</button>`
@@ -1226,6 +1232,17 @@ function updateStrokeLabel(){
   } else {
     el.textContent=`${round.curHole}H ${round.curStroke}打目`;
   }
+  updateStrokeSeq();
+}
+// 1打目からの使用クラブ・結果を並べて表示（要望I3。例：DR ○ , 5W △ ,…）
+function updateStrokeSeq(){
+  const el=document.getElementById("strokeSeq"); if(!el)return;
+  const hole=editState?round.shots[editState.idx].hole:round.curHole;
+  const hs=round.shots.filter(s=>s.hole===hole);
+  el.innerHTML=hs.map(s=>{
+    const r=RESULTS.find(x=>x.key===s.result);
+    return `${esc(s.club||"?")} <span class="${r?r.cls:""}">${esc(s.result||"-")}</span>`;
+  }).join(" , ");
 }
 function updateHoleBar(){
   // ホールバーは削除済み。打数表示・ホールスコアUI更新・1打目のライ自動セットを実行
@@ -1628,6 +1645,32 @@ function roundStats(r){
     puttLineCnt:cnt("puttLine"),puttTouchCnt:cnt("puttTouch"),causeCnt,clubStat,okRate,ob,pond};
 }
 function topEntries(m,n=3){ return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,n); }
+/* ---- クラブ別使用回数 円グラフ（要望I2） ---- */
+const PIE_COLORS=["#1f7a4d","#175cd3","#b54708","#b42318","#7a5af8","#0e9384","#ca8504","#dd2590","#4e5ba6","#e04f16","#099250","#6172f3"];
+function pieSlices(entries){
+  const total=entries.reduce((a,e)=>a+e[1],0)||1;
+  let ang=-Math.PI/2;
+  return entries.map(([label,v],i)=>{
+    const a0=ang, a1=ang+2*Math.PI*v/total; ang=a1;
+    return {label,v,a0,a1,color:PIE_COLORS[i%PIE_COLORS.length],pct:Math.round(v/total*100)};
+  });
+}
+function pieChartSVG(entries,size){
+  size=size||180;
+  const s=pieSlices(entries), r=size/2-2, cx=size/2, cy=size/2;
+  if(!entries.length)return "";
+  if(entries.length===1)return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${cx}" cy="${cy}" r="${r}" fill="${s[0].color}"/></svg>`;
+  const paths=s.map(sl=>{
+    const x0=cx+r*Math.cos(sl.a0), y0=cy+r*Math.sin(sl.a0);
+    const x1=cx+r*Math.cos(sl.a1), y1=cy+r*Math.sin(sl.a1);
+    const large=(sl.a1-sl.a0)>Math.PI?1:0;
+    return `<path d="M${cx},${cy} L${x0.toFixed(1)},${y0.toFixed(1)} A${r},${r} 0 ${large} 1 ${x1.toFixed(1)},${y1.toFixed(1)} Z" fill="${sl.color}"/>`;
+  }).join("");
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${paths}</svg>`;
+}
+function clubUseEntries(st){
+  return Object.entries(st.clubStat).map(([c,s])=>[c,s.n]).sort((a,b)=>b[1]-a[1]);
+}
 // スコア別ゴルフ基準値一覧（要望K3の表より）：目標スコアごとの基準値
 const BENCHMARKS=[
   {score:99, parOn:0,  within1:9,  putts:39, fw:"OB3以内"},
@@ -1743,6 +1786,12 @@ function renderSheet(r){
     <div style="margin-top:4px;">パット傾向：${puttTend}</div>
     <h3>クラブ別成功率（○=100% / △=50% / ×=0%）</h3>
     <div class="wide"><table><tr><th>クラブ</th><th>使用数</th><th>成功率</th></tr>${clubRows}</table></div>
+    ${(()=>{ // クラブ別使用回数の円グラフ（要望I2）
+      const ue=clubUseEntries(st);
+      if(!ue.length)return "";
+      const legend=pieSlices(ue).map(sl=>`<div style="display:flex;align-items:center;gap:6px;padding:2px 0;font-size:13px;"><span style="width:12px;height:12px;border-radius:3px;background:${sl.color};display:inline-block;flex:0 0 auto;"></span>${esc(sl.label)}：${sl.v}回（${sl.pct}%）</div>`).join("");
+      return `<h3>クラブ別使用回数</h3><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">${pieChartSVG(ue,180)}<div>${legend}</div></div>`;
+    })()}
     <h3>次回への課題</h3>
     <div>${advice.map(a=>`<div style="padding:4px 0;">・${esc(a)}</div>`).join("")}</div>
     ${reflectionItems(r).length?`<h3>ショット別振り返り</h3>
@@ -1757,7 +1806,8 @@ function drawSheetCanvas(r){
   let rows=st.perHole.length;
   const refItems=reflectionItems(r);
   const refLines=refItems.reduce((a,[k,v])=>a+Math.ceil((k.length+v.length)/32)+1,0);
-  const H=600+rows*lh+Object.keys(st.clubStat).length*lh+780+(refItems.length?100+refLines*36:0);
+  const nClubs=Object.keys(st.clubStat).length;
+  const H=600+rows*lh+nClubs*lh+780+(nClubs?Math.max(340,nClubs*34+110):0)+(refItems.length?100+refLines*36:0);
   const cv=document.createElement("canvas"); cv.width=W; cv.height=H;
   const g=cv.getContext("2d");
   g.fillStyle="#fff"; g.fillRect(0,0,W,H);
@@ -1815,6 +1865,24 @@ function drawSheetCanvas(r){
     g.fillText(`${c}：${Math.round(s.sum/s.n*100)}%（${s.n}打）`,pad,y); y+=lh;
   });
   y+=20;
+  // クラブ別使用回数（円グラフ・要望I2）
+  const ue=clubUseEntries(st);
+  if(ue.length){
+    g.font="bold 28px sans-serif"; g.fillStyle="#1f7a4d"; g.fillText("クラブ別使用回数",pad,y); y+=26;
+    const slices=pieSlices(ue), R=130, cx=pad+R, cy=y+R;
+    slices.forEach(sl=>{
+      g.beginPath(); g.moveTo(cx,cy); g.arc(cx,cy,R,sl.a0,sl.a1); g.closePath();
+      g.fillStyle=sl.color; g.fill();
+    });
+    g.font="24px sans-serif";
+    let ly=y+30;
+    slices.forEach(sl=>{
+      g.fillStyle=sl.color; g.fillRect(cx+R+40,ly-18,20,20);
+      g.fillStyle="#16202a"; g.fillText(`${sl.label}：${sl.v}回（${sl.pct}%）`,cx+R+70,ly);
+      ly+=34;
+    });
+    y=Math.max(cy+R,ly)+40;
+  }
   // 課題
   g.font="bold 28px sans-serif"; g.fillStyle="#1f7a4d"; g.fillText("次回への課題",pad,y); y+=40;
   g.font="26px sans-serif"; g.fillStyle="#16202a";
