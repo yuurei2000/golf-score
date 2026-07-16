@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hearing & Reflection</title>
+<style>
+:root{
+  --bg:#f6f7f8; --card:#fff; --text:#16202a; --muted:#667085; --line:#d0d5dd;
+  /* テーマ色を青系に（旧：緑） */
+  --primary:#175cd3; --primary2:#eff4ff; --primary-border:#b2ccff; --primary-dark:#0b62c4;
+  --danger:#b42318; --warn:#b54708; --accent:#175cd3;
+  --radius:16px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;background:var(--bg);color:var(--text);font-size:16px;padding-bottom:40px;}
+header{position:sticky;top:0;z-index:30;background:var(--primary);border-bottom:1px solid var(--primary-dark);padding:10px 14px;display:flex;justify-content:center;align-items:center;box-shadow:0 1px 3px rgba(16,24,40,.12);}
+h1{font-size:15px;margin:0;font-weight:800;color:#fff;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+@media(max-width:400px){h1{font-size:13px;}}
+
+/* タブナビ（青系） */
+#tabBar{position:sticky;top:49px;z-index:29;background:#fff;border-bottom:1px solid var(--line);padding:8px 10px;}
+.tab-row{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;}
+.tab-pill{flex:0 0 auto;border:1.5px solid var(--line);background:#eef2f6;color:#344054;border-radius:999px;padding:9px 18px;font-size:14px;font-weight:800;white-space:nowrap;cursor:pointer;}
+.tab-pill.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+
+main{padding:12px;max-width:800px;margin:0 auto;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(16,24,40,.04);}
+h2{font-size:16px;margin:0 0 6px;font-weight:800;}
+h3{font-size:15px;margin:16px 0 6px;color:var(--primary);border-left:4px solid var(--primary);padding-left:8px;}
+label,.sec-label{display:block;font-size:13px;font-weight:700;margin:10px 0 6px;color:#344054;}
+.small{font-size:12px;color:var(--muted);line-height:1.45;}
+input[type=text],input[type=number],textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:11px;background:#fff;font-size:16px;font:inherit;}
+textarea{min-height:56px;resize:vertical;line-height:1.5;}
+button{font:inherit;touch-action:manipulation;cursor:pointer;}
+
+.screen{display:none;}
+.screen.active{display:block;}
+
+/* チェックボックス選択肢 */
+.check-list{display:flex;flex-direction:column;gap:2px;}
+.check-item{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #eef2f6;cursor:pointer;font-size:15px;}
+.check-item input[type=checkbox]{width:22px;height:22px;flex:0 0 auto;accent-color:var(--primary);}
+.check-item.other{align-items:center;}
+.check-item.other input[type=text]{flex:1;padding:8px;}
+
+/* 頻度ラジオ */
+.radio-row{display:flex;flex-wrap:wrap;gap:8px;}
+.radio-pill{border:1.5px solid var(--line);background:#fff;color:#344054;border-radius:12px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer;}
+.radio-pill.sel{background:var(--primary2);border-color:var(--primary);color:var(--primary);}
+
+.row2{display:flex;gap:8px;flex-wrap:wrap;}
+.row2>*{flex:1;min-width:120px;}
+.inline-field{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.inline-field label{margin:0;white-space:nowrap;}
+.inline-field input{width:auto;flex:1;min-width:100px;}
+
+.action-btn{display:block;width:100%;min-height:52px;border:0;border-radius:14px;padding:13px 14px;font-weight:800;font-size:16px;background:var(--primary);color:#fff;margin:8px 0;}
+.action-btn.secondary{background:#344054;}
+.action-btn.light{background:var(--primary2);color:var(--primary);border:1px solid var(--primary-border);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.grid2 .action-btn{margin:0;}
+
+.saved-note{font-size:12px;font-weight:700;color:var(--primary);min-height:1.2em;margin-top:4px;}
+
+/* 印刷（シート化） */
+@media print{
+  header,#tabBar,.no-print{display:none !important;}
+  body{padding:0;background:#fff;}
+  .card{border:none;box-shadow:none;page-break-inside:avoid;}
+  .screen{display:block !important;}
+  textarea{border:1px solid #999;}
+}
+</style>
+</head>
+<body>
+
+<header><h1 id="headerTitle">Hearing &amp; Reflection ～自己分析・課題発見～</h1></header>
+
+<nav id="tabBar"><div class="tab-row" id="tabRow"></div></nav>
+
+<main>
+
+<!-- ============ ヒアリングシート ============ -->
+<div class="screen active" id="scrHearing">
+  <div class="card">
+    <div class="row2">
+      <div class="inline-field"><label>お名前</label><input type="text" id="hName" placeholder="お名前"></div>
+    </div>
+    <div class="inline-field" style="margin-top:10px;">
+      <label>参加日</label>
+      <input type="number" inputmode="numeric" id="hDateY" placeholder="2026" style="max-width:90px;flex:0 0 auto;"><span>年</span>
+      <input type="number" inputmode="numeric" id="hDateM" placeholder="7" style="max-width:70px;flex:0 0 auto;"><span>月</span>
+      <input type="number" inputmode="numeric" id="hDateD" placeholder="16" style="max-width:70px;flex:0 0 auto;"><span>日</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>1. ゴルフ歴・プレースタイルについて</h2>
+    <div class="inline-field"><label>ゴルフ歴</label><input type="text" id="hHistory" placeholder="例：5" style="max-width:120px;flex:0 0 auto;"><span>年</span></div>
+    <div class="inline-field" style="margin-top:8px;"><label>平均スコア（目安で構いません）</label><input type="text" id="hAvgScore" placeholder="例：95前後"></div>
+    <label>普段ラウンドする頻度</label>
+    <div class="radio-row" id="hFreqBtns"></div>
+    <div class="inline-field" style="margin-top:10px;"><label>よく行くゴルフ場</label><input type="text" id="hCourse" placeholder="例：○○カントリークラブ"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. ラウンドレッスンで重点的に見てほしいこと</h2>
+    <div class="small">複数選択可</div>
+    <div class="check-list" id="hFocusList"></div>
+  </div>
+
+  <div class="card">
+    <h2>3. ご自身で感じている課題や悩み（自由記述）</h2>
+    <textarea id="hIssues" rows="4" style="min-height:110px;" placeholder="例：ドライバーが安定しない／アプローチの距離感が合わない など"></textarea>
+  </div>
+
+  <div class="card">
+    <h2>4. 直近のラウンドで印象的だった出来事（成功・失敗どちらでも）</h2>
+    <textarea id="hEpisode" rows="4" style="min-height:110px;" placeholder="例：18番でOB連発／ロングパットが決まった など"></textarea>
+  </div>
+
+  <div class="card">
+    <h2>5. レッスンでの目標・期待していること</h2>
+    <textarea id="hGoal" rows="4" style="min-height:110px;" placeholder="例：100切りを目指したい／スイングの再現性を上げたい など"></textarea>
+  </div>
+
+  <div class="card no-print">
+    <button class="action-btn" onclick="saveHearing()">保存</button>
+    <div class="grid2">
+      <button class="action-btn light" onclick="window.print()">印刷 / PDF</button>
+      <button class="action-btn secondary" onclick="clearHearing()">クリア</button>
+    </div>
+    <div class="saved-note" id="hSaved"></div>
+    <div class="small">入力内容はこの端末（ブラウザ）に自動保存されます。印刷／PDFで用紙として出力できます。</div>
+  </div>
+</div>
+
+<!-- ============ リフレクションシート（旧：ショット別振り返り） ============ -->
+<div class="screen" id="scrReflection">
+  <div class="card">
+    <h2>リフレクションシート（自由記述）</h2>
+    <div class="small">ショットごとに振り返りを記入します。入力内容はこの端末に自動保存されます。</div>
+    <label>ティーショット</label>
+    <textarea class="refText" data-key="tee" rows="2" placeholder="例：右へのミスが多い／良かったホールの共通点など"></textarea>
+    <label>セカンドショット</label>
+    <textarea class="refText" data-key="second" rows="2" placeholder="例：番手選び、ライの判断、ミスの傾向など"></textarea>
+    <label>アプローチ・バンカー</label>
+    <textarea class="refText" data-key="approach" rows="2" placeholder="例：距離感、方向性、苦手な状況など"></textarea>
+    <label>パッティング</label>
+    <textarea class="refText" data-key="putt" rows="2" placeholder="例：ショートが多い／ライン読みは合っていたかなど"></textarea>
+    <label>まとめ・次回への意識</label>
+    <textarea class="refText" data-key="summary" rows="2" placeholder="例：次回はティーショットの方向重視"></textarea>
+  </div>
+
+  <div class="card no-print">
+    <button class="action-btn" onclick="saveReflection()">保存</button>
+    <div class="grid2">
+      <button class="action-btn light" onclick="window.print()">印刷 / PDF</button>
+      <button class="action-btn secondary" onclick="clearReflection()">クリア</button>
+    </div>
+    <div class="saved-note" id="rSaved"></div>
+  </div>
+</div>
+
+</main>
+
+<script>
+"use strict";
+
+/* ============ 定数 ============ */
+const TABS=[
+  {key:"hearing",label:"ヒアリングシート",screen:"scrHearing"},
+  {key:"reflection",label:"リフレクションシート",screen:"scrReflection"}
+];
+const FREQ=["月1回以下","月2〜3回","週1回以上"];
+const FOCUS=[
+  "ティーショット（ドライバー）",
+  "セカンドショット（フェアウェイウッド／UT／アイアン）",
+  "アプローチ",
+  "バンカー",
+  "パッティング",
+  "コースマネジメント",
+  "メンタル（緊張対策など）",
+  "ルール・マナー"
+];
+const LS_HEARING="hearRef_hearing";
+const LS_REFLECTION="hearRef_reflection";
+
+/* ============ ユーティリティ ============ */
+function $(id){ return document.getElementById(id); }
+function loadJSON(k,d){ try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;} }
+function saveJSON(k,v){ localStorage.setItem(k,JSON.stringify(v)); }
+function esc(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function flashSaved(id){ const el=$(id); if(!el)return; el.textContent="保存しました"; setTimeout(()=>{if(el.textContent==="保存しました")el.textContent="";},2500); }
+
+/* ============ タブ ============ */
+function renderTabs(activeKey){
+  $("tabRow").innerHTML=TABS.map(t=>
+    `<button type="button" class="tab-pill${t.key===activeKey?" active":""}" onclick="goTab('${t.key}')">${esc(t.label)}</button>`
+  ).join("");
+}
+function goTab(key){
+  const t=TABS.find(x=>x.key===key); if(!t)return;
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  $(t.screen).classList.add("active");
+  renderTabs(key);
+  window.scrollTo(0,0);
+}
+
+/* ============ ヒアリングシート ============ */
+let hearing=loadJSON(LS_HEARING,{name:"",y:"",m:"",d:"",history:"",avgScore:"",freq:"",course:"",focus:[],focusOther:"",issues:"",episode:"",goal:""});
+function renderHearing(){
+  $("hName").value=hearing.name||"";
+  $("hDateY").value=hearing.y||""; $("hDateM").value=hearing.m||""; $("hDateD").value=hearing.d||"";
+  $("hHistory").value=hearing.history||"";
+  $("hAvgScore").value=hearing.avgScore||"";
+  $("hCourse").value=hearing.course||"";
+  $("hIssues").value=hearing.issues||"";
+  $("hEpisode").value=hearing.episode||"";
+  $("hGoal").value=hearing.goal||"";
+  // 頻度
+  $("hFreqBtns").innerHTML=FREQ.map(f=>
+    `<button type="button" class="radio-pill${hearing.freq===f?" sel":""}" onclick="setFreq('${f}')">${esc(f)}</button>`
+  ).join("");
+  // 重点項目
+  let html=FOCUS.map(f=>
+    `<label class="check-item"><input type="checkbox" ${hearing.focus.includes(f)?"checked":""} onchange="toggleFocus('${esc(f).replace(/'/g,"\\'")}',this.checked)"><span>${esc(f)}</span></label>`
+  ).join("");
+  html+=`<label class="check-item other"><input type="checkbox" id="hFocusOtherChk" ${hearing.focusOther?"checked":""} onchange="onFocusOtherChk(this.checked)"><span>その他（</span><input type="text" id="hFocusOther" value="${esc(hearing.focusOther||"")}" placeholder="自由入力" oninput="onFocusOtherInput(this.value)"><span>）</span></label>`;
+  $("hFocusList").innerHTML=html;
+}
+function setFreq(f){ hearing.freq=(hearing.freq===f)?"":f; renderHearing(); }
+function toggleFocus(f,on){
+  const i=hearing.focus.indexOf(f);
+  if(on&&i<0)hearing.focus.push(f);
+  else if(!on&&i>=0)hearing.focus.splice(i,1);
+}
+function onFocusOtherChk(on){ if(!on)hearing.focusOther=""; renderHearing(); }
+function onFocusOtherInput(v){ hearing.focusOther=v; const chk=$("hFocusOtherChk"); if(chk)chk.checked=!!v.trim(); }
+function collectHearing(){
+  hearing.name=$("hName").value.trim();
+  hearing.y=$("hDateY").value.trim(); hearing.m=$("hDateM").value.trim(); hearing.d=$("hDateD").value.trim();
+  hearing.history=$("hHistory").value.trim();
+  hearing.avgScore=$("hAvgScore").value.trim();
+  hearing.course=$("hCourse").value.trim();
+  hearing.issues=$("hIssues").value.trim();
+  hearing.episode=$("hEpisode").value.trim();
+  hearing.goal=$("hGoal").value.trim();
+  const other=$("hFocusOther"); if(other)hearing.focusOther=other.value.trim();
+}
+function saveHearing(){ collectHearing(); saveJSON(LS_HEARING,hearing); flashSaved("hSaved"); }
+function clearHearing(){
+  if(!confirm("ヒアリングシートの入力内容をクリアしますか？"))return;
+  hearing={name:"",y:"",m:"",d:"",history:"",avgScore:"",freq:"",course:"",focus:[],focusOther:"",issues:"",episode:"",goal:""};
+  saveJSON(LS_HEARING,hearing); renderHearing();
+}
+
+/* ============ リフレクションシート ============ */
+let reflection=loadJSON(LS_REFLECTION,{tee:"",second:"",approach:"",putt:"",summary:""});
+function renderReflection(){
+  document.querySelectorAll(".refText").forEach(t=>t.value=reflection[t.dataset.key]||"");
+}
+function saveReflection(){
+  document.querySelectorAll(".refText").forEach(t=>reflection[t.dataset.key]=t.value.trim());
+  saveJSON(LS_REFLECTION,reflection); flashSaved("rSaved");
+}
+function clearReflection(){
+  if(!confirm("リフレクションシートの入力内容をクリアしますか？"))return;
+  reflection={tee:"",second:"",approach:"",putt:"",summary:""};
+  saveJSON(LS_REFLECTION,reflection); renderReflection();
+}
+
+/* ============ 自動保存（入力のたび） ============ */
+document.addEventListener("DOMContentLoaded",()=>{
+  renderTabs("hearing");
+  renderHearing();
+  renderReflection();
+  // ヒアリング自動保存
+  ["hName","hDateY","hDateM","hDateD","hHistory","hAvgScore","hCourse","hIssues","hEpisode","hGoal"].forEach(id=>{
+    const el=$(id); if(el)el.addEventListener("input",()=>{collectHearing();saveJSON(LS_HEARING,hearing);});
+  });
+  $("hFocusList").addEventListener("change",()=>{collectHearing();saveJSON(LS_HEARING,hearing);});
+  // リフレクション自動保存
+  document.querySelectorAll(".refText").forEach(t=>t.addEventListener("input",()=>{
+    reflection[t.dataset.key]=t.value.trim(); saveJSON(LS_REFLECTION,reflection);
+  }));
+});
+</script>
+</body>
+</html>
