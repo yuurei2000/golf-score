@@ -46,7 +46,10 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
 /* 下位タブ（ホール入力ストリップと同デザイン） */
 .subtab-row{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:2px 2px 8px;margin-bottom:6px;}
 .subtab{flex:0 0 auto;min-height:40px;border-radius:9px;border:1.5px solid var(--line);background:#fff;color:#344054;font-size:14px;font-weight:800;padding:0 14px;white-space:nowrap;cursor:pointer;}
-.subtab.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+.subtab.active{background:var(--primary2);color:var(--primary);border-color:var(--primary);}  /* 選択時は薄緑（要望C3） */
+/* ティーボタンを1行で表示（要望A2/G3） */
+.one-line{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;}
+.one-line .opt-btn{flex:0 0 auto;min-width:0;padding:6px 10px;font-size:13px;min-height:40px;white-space:nowrap;}
 
 /* アクションボタン */
 .action-btn{display:block;width:100%;min-height:52px;border:0;border-radius:14px;padding:13px 14px;font-weight:800;font-size:16px;background:var(--primary);color:#fff;margin:8px 0;}
@@ -144,6 +147,13 @@ details.detail-box .inner{padding:0 12px 12px;}
 /* クラブ選択の上の「○H ○打目」表示 */
 #strokeLabel{font-size:20px;font-weight:800;color:var(--primary);margin-bottom:2px;}
 #strokeLabel .edit-tag{font-size:13px;color:var(--accent);margin-left:6px;}
+#strokeLabel.flash{animation:strokePop 1s ease;}
+@keyframes strokePop{
+  0%{color:var(--primary);transform:scale(1);}
+  25%{color:var(--warn);transform:scale(1.25);}
+  60%{color:var(--warn);transform:scale(1.1);}
+  100%{color:var(--primary);transform:scale(1);}
+}
 .r-ok{color:var(--primary);font-weight:800;}
 .r-tri{color:var(--warn);font-weight:800;}
 .r-ng{color:var(--danger);font-weight:800;}
@@ -241,15 +251,15 @@ td.hno{font-weight:800;background:#f9fafb;}
   </div>
 </div>
 
-<!-- ============ ゴルフ場情報：新規登録（コース選択） ============ -->
+<!-- ============ ゴルフ場情報：新規登録 ============ -->
+<!-- 作成済みゴルフ場の一覧はここには表示しない（ゴルフ場マスタに表示・要望C2） -->
 <div class="screen active" id="scrCourseSelect">
   <div class="subtab-row" data-sub="course"></div>
   <div id="resumeArea"></div>
   <div class="card">
-    <h2>ゴルフ場の選択</h2>
-    <div id="savedCourseList"></div>
+    <h2>ゴルフ場の登録</h2>
     <button class="action-btn light" onclick="startNewCourse()">＋ 新しいゴルフ場を登録</button>
-    <div class="small">一度登録したゴルフ場は次回から再入力不要です。</div>
+    <div class="small">登録済みのゴルフ場は「ゴルフ場マスタ」から選択・編集できます。</div>
   </div>
 </div>
 
@@ -270,7 +280,7 @@ td.hno{font-weight:800;background:#f9fafb;}
 
   <div class="card">
     <h2>ティー構成</h2>
-    <div id="ceTeeList" class="btn-grid"></div>
+    <div id="ceTeeList" class="btn-grid one-line"></div>
     <button class="action-btn light small" onclick="addTee()">＋ ティーを追加</button>
     <div class="small">ティ選択中に再タップで変更できます</div>
   </div>
@@ -288,13 +298,9 @@ td.hno{font-weight:800;background:#f9fafb;}
   <div class="card">
     <h2>ラウンド設定</h2>
     <div id="rsCourseName" style="font-weight:800;font-size:16px;"></div>
-    <label>お名前（前回の名前を自動表示）</label>
-    <div class="row2" style="display:flex;gap:8px;">
-      <input type="text" id="rsPlayer" placeholder="例：佐藤 太郎" style="flex:1;">
-      <button class="action-btn light small" style="width:auto;white-space:nowrap;margin:0;" onclick="renderBasicInfo();showScreen('scrClubs')">基本情報</button>
-    </div>
+    <!-- お名前欄は削除（基本情報タブで設定・要望G2） -->
     <label class="required">使用ティー</label>
-    <div class="btn-grid" id="rsTeeBtns"></div>
+    <div class="btn-grid one-line" id="rsTeeBtns"></div>
     <label class="required">スタートコース</label>
     <div class="btn-grid" id="rsStartCourseBtns"></div>
     <label class="required">天候</label>
@@ -742,28 +748,22 @@ function renderResume(){
   } else area.innerHTML="";
 }
 function renderCourseSelect(){
+  // 作成済みゴルフ場の一覧はゴルフ場マスタで表示（要望C2）。ここではラウンド再開のみ
   renderResume();
-  const el=document.getElementById("savedCourseList");
-  if(!courses.length){ el.innerHTML=`<div class="small">登録済みゴルフ場はありません。下のボタンから登録してください。</div>`; return; }
+}
+function renderCourseMaster(){
+  const el=document.getElementById("masterList");
+  if(!courses.length){ el.innerHTML=`<div class="small">登録済みゴルフ場はありません。「新規登録」から登録してください。</div>`; return; }
   el.innerHTML=courses.map(c=>`
     <div class="course-item" onclick="chooseCourse('${c.id}')">
       <div class="name">${esc(c.name)}</div>
       <div class="sub">${esc(c.pref||"")}　${c.courseNames.join("・")}　ティー：${c.tees.join("/")}<br>
         <span class="pill ${c.confirmed?"":"warn"}">${c.confirmed?"確認済み":"未確認"}</span>
         <span class="badge">登録日：${esc(c.savedDate)}</span></div>
-    </div>`).join("");
-}
-function renderCourseMaster(){
-  const el=document.getElementById("masterList");
-  if(!courses.length){ el.innerHTML=`<div class="small">登録済みゴルフ場はありません。</div>`; return; }
-  el.innerHTML=courses.map(c=>`
-    <div class="course-item">
-      <div class="name">${esc(c.name)}</div>
-      <div class="sub">${esc(c.pref||"")}　登録日：${esc(c.savedDate)}
-        <span class="pill ${c.confirmed?"":"warn"}">${c.confirmed?"確認済み":"未確認"}</span></div>
+      <div class="small" style="margin-top:4px;color:var(--primary);font-weight:700;">タップでこのゴルフ場を選択（ラウンド開始へ）</div>
       <div class="grid2" style="margin-top:8px;">
-        <button class="action-btn light small" onclick="editCourse('${c.id}')">編集</button>
-        <button class="action-btn danger small" onclick="deleteCourse('${c.id}')">削除</button>
+        <button class="action-btn light small" onclick="event.stopPropagation();editCourse('${c.id}')">編集</button>
+        <button class="action-btn danger small" onclick="event.stopPropagation();deleteCourse('${c.id}')">削除</button>
       </div>
     </div>`).join("");
 }
@@ -1071,7 +1071,7 @@ function chooseCourse(id){
   const c=courses.find(x=>x.id===id);
   setupSel={tee:null,startCourse:null,weather:null,condition:null,courseId:id};
   document.getElementById("rsCourseName").textContent=c.name+(c.pref?`（${c.pref}）`:"");
-  document.getElementById("rsPlayer").value=playerName;   // 前回の名前を自動表示
+  // お名前欄は削除（playerNameは基本情報タブで管理・要望G2）
   buildBtns("rsTeeBtns",c.tees,(v,b,el)=>{setupSel.tee=v;selectSingle(el,v);renderHolePreview();checkSetupReady();});
   buildBtns("rsStartCourseBtns",c.courseNames,(v,b,el)=>{setupSel.startCourse=v;selectSingle(el,v);renderHolePreview();checkSetupReady();});
   buildBtns("rsWeatherBtns",WEATHERS,(v,b,el)=>{setupSel.weather=v;selectSingle(el,v);checkSetupReady();});
@@ -1104,8 +1104,7 @@ function checkSetupReady(){
 }
 function startRound(){
   const c=courses.find(x=>x.id===setupSel.courseId);
-  playerName=document.getElementById("rsPlayer").value.trim();
-  localStorage.setItem(LS_PLAYER,playerName);   // 名前を前回保持
+  // 名前は基本情報タブで保存済みの playerName を使用（要望G2）
   // スタートコースが後半（2つ目のコース名）なら 10H→18H→1H→9H の順（要望E5）
   const ci=c.courseNames.indexOf(setupSel.startCourse);
   const order=(ci===1)
@@ -1394,6 +1393,14 @@ function registerShot(){
   saveJSON(LS_CURRENT,round);
   clearInputUI(); updateHoleBar(); updateRegisterState(); renderShotList();
   window.scrollTo(0,0);
+  flashStrokeLabel();   // 「〇打目」をフォーカスして色を変える（要望I2）
+}
+// 打数表示をフラッシュ（記録後に次の打数へ進んだことを視覚化）
+function flashStrokeLabel(){
+  const el=document.getElementById("strokeLabel"); if(!el)return;
+  el.scrollIntoView({block:"center",behavior:"smooth"});
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+  setTimeout(()=>el.classList.remove("flash"),1100);
 }
 
 /* ---- 編集・挿入・削除 ---- */
@@ -1606,10 +1613,44 @@ function roundStats(r){
   const okRate=r.shots.length?Math.round(r.shots.filter(s=>s.result==="○").length/r.shots.length*100):0;
   const ob=r.shots.filter(s=>toArr(s.missSpecial).includes("OB")).length;
   const pond=r.shots.filter(s=>toArr(s.missSpecial).some(v=>v.includes("池"))).length;
-  return {perHole,totalStrokes,totalPar,totalPutts,totalPenalty,threePutts,dirCnt:cnt("missDir"),hitCnt:cnt("missHit"),
+  // パーオン／ボギーオン／ダボオン（グリーン到達打数＝記録打数−パット数で判定・要望K2）
+  let parOn=0,bogeyOn=0,dblOn=0;
+  perHole.forEach(h=>{
+    if(!h.recorded||!h.par)return;
+    const reach=h.recorded-h.putts;                 // グリーンに乗るまでの打数
+    const diff=reach-(h.par-2);
+    if(diff<=0)parOn++;
+    else if(diff===1)bogeyOn++;
+    else if(diff===2)dblOn++;
+  });
+  return {perHole,totalStrokes,totalPar,totalPutts,totalPenalty,threePutts,parOn,bogeyOn,dblOn,
+    dirCnt:cnt("missDir"),hitCnt:cnt("missHit"),
     puttLineCnt:cnt("puttLine"),puttTouchCnt:cnt("puttTouch"),causeCnt,clubStat,okRate,ob,pond};
 }
 function topEntries(m,n=3){ return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,n); }
+// スコア別ゴルフ基準値一覧（要望K3の表より）：目標スコアごとの基準値
+const BENCHMARKS=[
+  {score:99, parOn:0,  within1:9,  putts:39, fw:"OB3以内"},
+  {score:90, parOn:2,  within1:16, putts:34, fw:"OB1〜2"},
+  {score:84, parOn:3,  within1:18, putts:33, fw:"7/14"},
+  {score:78, parOn:6,  within1:18, putts:32, fw:"9/14"},
+  {score:72, parOn:12, within1:18, putts:30, fw:"11/14"},
+  {score:68, parOn:15, within1:18, putts:29, fw:"13/14"}
+];
+// 目標スコアに最も近い基準値と実績の差異行を生成（要望K3）
+function benchmarkLines(r,st){
+  const goal=(r.intent&&r.intent.goalScore)||0;
+  if(!goal||!st.perHole.length)return [];
+  const bm=BENCHMARKS.reduce((a,b)=>Math.abs(b.score-goal)<Math.abs(a.score-goal)?b:a);
+  const within1=st.parOn+st.bogeyOn;
+  const d=(v)=>v>0?`+${v}`:`${v}`;
+  const lines=[];
+  lines.push(`目標${goal}（基準値スコア${bm.score}）との比較：`);
+  lines.push(`　パーオン：${st.parOn}回（基準${bm.parOn}回／差${d(st.parOn-bm.parOn)}）`);
+  lines.push(`　パーオン+1以内：${within1}回（基準${bm.within1}回／差${d(within1-bm.within1)}）`);
+  lines.push(`　パット数：${st.totalPutts}（基準${bm.putts}以下／差${d(st.totalPutts-bm.putts)}）`);
+  return lines;
+}
 
 /* ============ リフレクションシート ============ */
 function openReflection(r){
@@ -1665,6 +1706,8 @@ function renderSheet(r){
   if(touchTop&&touchTop[0]!=="ジャスト"&&touchTop[1]>=2)advice.push(`パットは「${touchTop[0]}」傾向（${touchTop[1]}回）。${touchTop[0]==="ショート"?"強めのタッチを意識しましょう。":touchTop[0]==="オーバー"?"タッチを抑える練習が有効です。":"打ち出し方向とラインの読みを見直しましょう。"}`);
   if(weakClubs.length)advice.push(`成功率が低いクラブ：${weakClubs.map(c=>`${c.c}(${c.rate}%)`).join("、")}。次回練習の候補です。`);
   if(st.ob)advice.push(`OBが${st.ob}回。ティーショットの安全マネジメントを検討しましょう。`);
+  // 目標スコアに対する基準値一覧との差異（要望K3）
+  benchmarkLines(r,st).forEach(l=>advice.push(l));
   if(!advice.length)advice.push("大きな課題は見当たりません。この調子で！");
   const scoreDisp=st.totalPar?`${st.totalStrokes}（Par${st.totalPar} ${st.totalStrokes-st.totalPar>=0?"+":""}${st.totalStrokes-st.totalPar}）`:`${st.totalStrokes}`;
   const iv=r.intent||{};
@@ -1688,7 +1731,8 @@ function renderSheet(r){
     <h3>スコアサマリー</h3>
     <div><span class="badge">合計 ${scoreDisp}</span> <span class="badge">パット ${st.totalPutts}</span>
       <span class="badge">○率 ${st.okRate}%</span> <span class="badge">3パット ${st.threePutts}回</span>
-      <span class="badge">OB ${st.ob}回・池 ${st.pond}回</span> <span class="badge">ペナルティ ${st.totalPenalty}打</span></div>
+      <span class="badge">OB ${st.ob}回・池 ${st.pond}回</span> <span class="badge">ペナルティ ${st.totalPenalty}打</span>
+      <span class="badge">パーオン ${st.parOn}回</span> <span class="badge">ボギーオン ${st.bogeyOn}回</span> <span class="badge">ダボオン ${st.dblOn}回</span></div>
     ${intentHtml}
     <h3>ホール別</h3>
     <div class="wide"><table><tr><th>H</th><th>Par</th><th>打数</th><th>パット</th><th>結果</th></tr>${holeRows}</table></div>
@@ -1713,7 +1757,7 @@ function drawSheetCanvas(r){
   let rows=st.perHole.length;
   const refItems=reflectionItems(r);
   const refLines=refItems.reduce((a,[k,v])=>a+Math.ceil((k.length+v.length)/32)+1,0);
-  const H=560+rows*lh+Object.keys(st.clubStat).length*lh+560+(refItems.length?100+refLines*36:0);
+  const H=600+rows*lh+Object.keys(st.clubStat).length*lh+780+(refItems.length?100+refLines*36:0);
   const cv=document.createElement("canvas"); cv.width=W; cv.height=H;
   const g=cv.getContext("2d");
   g.fillStyle="#fff"; g.fillRect(0,0,W,H);
@@ -1730,7 +1774,8 @@ function drawSheetCanvas(r){
   g.font="bold 34px sans-serif"; g.fillStyle="#1f7a4d";
   g.fillText(`合計 ${st.totalStrokes}${st.totalPar?`（Par${st.totalPar} ${diff>=0?"+":""}${diff}）`:""}　パット ${st.totalPutts}　○率 ${st.okRate}%`,pad,y); y+=36;
   g.font="26px sans-serif"; g.fillStyle="#667085";
-  g.fillText(`3パット ${st.threePutts}回　OB ${st.ob}回　池 ${st.pond}回　ペナルティ ${st.totalPenalty}打`,pad,y); y+=50;
+  g.fillText(`3パット ${st.threePutts}回　OB ${st.ob}回　池 ${st.pond}回　ペナルティ ${st.totalPenalty}打`,pad,y); y+=40;
+  g.fillText(`パーオン ${st.parOn}回　ボギーオン ${st.bogeyOn}回　ダボオン ${st.dblOn}回`,pad,y); y+=50;
   // ホール別表
   g.font="bold 28px sans-serif"; g.fillStyle="#1f7a4d"; g.fillText("ホール別",pad,y); y+=14;
   const cols=[pad,pad+110,pad+260,pad+460,pad+640];
@@ -1779,6 +1824,7 @@ function drawSheetCanvas(r){
   if(st.threePutts)lines.push(`3パット ${st.threePutts}ホール → ロングパット距離感の練習`);
   const weak=Object.entries(st.clubStat).map(([c,s])=>({c,n:s.n,rate:Math.round(s.sum/s.n*100)})).filter(x=>x.n>=2).sort((a,b)=>a.rate-b.rate).slice(0,3);
   if(weak.length)lines.push(`成功率の低いクラブ：${weak.map(x=>`${x.c}(${x.rate}%)`).join("、")}`);
+  benchmarkLines(r,st).forEach(l=>lines.push(l));   // 基準値一覧との差異（要望K3）
   if(!lines.length)lines.push("大きな課題なし。この調子で！");
   lines.forEach(t=>{g.fillText(`・${t}`,pad,y);y+=40;});
   // ショット別振り返り（自由記述）

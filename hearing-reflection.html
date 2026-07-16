@@ -39,7 +39,7 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
 
 /* チェックボックス選択肢 */
 .check-list{display:flex;flex-direction:column;gap:2px;}
-.check-item{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #eef2f6;cursor:pointer;font-size:15px;}
+.check-item{display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid #eef2f6;cursor:pointer;font-size:15px;line-height:1.35;}
 .check-item input[type=checkbox]{width:22px;height:22px;flex:0 0 auto;accent-color:var(--primary);}
 .check-item.other{align-items:center;}
 .check-item.other input[type=text]{flex:1;padding:8px;}
@@ -54,6 +54,11 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
 .inline-field{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .inline-field label{margin:0;white-space:nowrap;}
 .inline-field input{width:auto;flex:1;min-width:100px;}
+/* 参加日：1行で表示（折り返さない） */
+.date-field{display:flex;align-items:center;gap:5px;flex-wrap:nowrap;}
+.date-field label{margin:0;white-space:nowrap;flex:0 0 auto;}
+.date-field span{flex:0 0 auto;font-weight:700;}
+.date-field input{flex:1 1 0;min-width:0;width:100%;padding:11px 6px;text-align:center;}
 
 .action-btn{display:block;width:100%;min-height:52px;border:0;border-radius:14px;padding:13px 14px;font-weight:800;font-size:16px;background:var(--primary);color:#fff;margin:8px 0;}
 .action-btn.secondary{background:#344054;}
@@ -84,14 +89,12 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
 <!-- ============ ヒアリングシート ============ -->
 <div class="screen active" id="scrHearing">
   <div class="card">
-    <div class="row2">
-      <div class="inline-field"><label>お名前</label><input type="text" id="hName" placeholder="お名前"></div>
-    </div>
-    <div class="inline-field" style="margin-top:10px;">
+    <div class="inline-field"><label>お名前</label><input type="text" id="hName" placeholder="お名前"></div>
+    <div class="date-field" style="margin-top:10px;">
       <label>参加日</label>
-      <input type="number" inputmode="numeric" id="hDateY" placeholder="2026" style="max-width:90px;flex:0 0 auto;"><span>年</span>
-      <input type="number" inputmode="numeric" id="hDateM" placeholder="7" style="max-width:70px;flex:0 0 auto;"><span>月</span>
-      <input type="number" inputmode="numeric" id="hDateD" placeholder="16" style="max-width:70px;flex:0 0 auto;"><span>日</span>
+      <input type="number" inputmode="numeric" id="hDateY" placeholder="2026"><span>年</span>
+      <input type="number" inputmode="numeric" id="hDateM" placeholder="7"><span>月</span>
+      <input type="number" inputmode="numeric" id="hDateD" placeholder="16"><span>日</span>
     </div>
   </div>
 
@@ -132,7 +135,6 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
       <button class="action-btn secondary" onclick="clearHearing()">クリア</button>
     </div>
     <div class="saved-note" id="hSaved"></div>
-    <div class="small">入力内容はこの端末（ブラウザ）に自動保存されます。印刷／PDFで用紙として出力できます。</div>
   </div>
 </div>
 
@@ -140,7 +142,6 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
 <div class="screen" id="scrReflection">
   <div class="card">
     <h2>リフレクションシート（自由記述）</h2>
-    <div class="small">ショットごとに振り返りを記入します。入力内容はこの端末に自動保存されます。</div>
     <label>ティーショット</label>
     <textarea class="refText" data-key="tee" rows="2" placeholder="例：右へのミスが多い／良かったホールの共通点など"></textarea>
     <label>セカンドショット</label>
@@ -176,7 +177,7 @@ const TABS=[
 const FREQ=["月1回以下","月2〜3回","週1回以上"];
 const FOCUS=[
   "ティーショット（ドライバー）",
-  "セカンドショット（フェアウェイウッド／UT／アイアン）",
+  "セカンドショット（ウッド／UT／アイアン）",
   "アプローチ",
   "バンカー",
   "パッティング",
