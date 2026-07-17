@@ -25,6 +25,15 @@ h1{font-size:15px;margin:0;font-weight:800;color:#fff;letter-spacing:.01em;white
 .tab-pill.active{background:var(--primary);color:#fff;border-color:var(--primary);}
 
 main{padding:12px;max-width:800px;margin:0 auto;}
+
+/* サブタブ（新規作成／過去分表示） */
+.subtab-row{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:2px 2px 8px;margin-bottom:6px;}
+.subtab{flex:0 0 auto;min-height:40px;border-radius:9px;border:1.5px solid var(--line);background:#fff;color:#344054;font-size:14px;font-weight:800;padding:0 16px;white-space:nowrap;cursor:pointer;}
+.subtab.active{background:var(--primary2);color:var(--primary);border-color:var(--primary);}
+.hist-item{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;background:#fff;cursor:pointer;}
+.hist-item .name{font-weight:800;font-size:15px;}
+.hist-item .sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.hist-item .grid2{margin-top:8px;}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(16,24,40,.04);}
 h2{font-size:16px;margin:0 0 6px;font-weight:800;}
 h3{font-size:15px;margin:16px 0 6px;color:var(--primary);border-left:4px solid var(--primary);padding-left:8px;}
@@ -88,6 +97,19 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
 
 <!-- ============ ヒアリングシート ============ -->
 <div class="screen active" id="scrHearing">
+  <div class="subtab-row">
+    <button type="button" class="subtab active" id="hSubNew" onclick="newHearing()">新規作成</button>
+    <button type="button" class="subtab" id="hSubHist" onclick="showHearingView('list')">過去分表示</button>
+  </div>
+
+  <div id="hearingHistory" style="display:none;">
+    <div class="card">
+      <h2>過去のヒアリングシート</h2>
+      <div id="hearingListEl"></div>
+    </div>
+  </div>
+
+  <div id="hearingForm">
   <div class="card">
     <div class="inline-field"><label>お名前</label><input type="text" id="hName" placeholder="例：千里龍太郎"></div>
     <div class="date-field" style="margin-top:10px;">
@@ -136,13 +158,27 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
     </div>
     <div class="saved-note" id="hSaved"></div>
   </div>
+  </div><!-- /hearingForm -->
 </div>
 
 <!-- ============ リフレクションシート（旧：ショット別振り返り） ============ -->
 <div class="screen" id="scrReflection">
+  <div class="subtab-row">
+    <button type="button" class="subtab active" id="rSubNew" onclick="newReflection()">新規作成</button>
+    <button type="button" class="subtab" id="rSubHist" onclick="showReflectionView('list')">過去分表示</button>
+  </div>
+
+  <div id="reflectionHistory" style="display:none;">
+    <div class="card">
+      <h2>過去のリフレクションシート</h2>
+      <div id="reflectionListEl"></div>
+    </div>
+  </div>
+
+  <div id="reflectionForm">
   <div class="card">
-    <h2>リフレクションシート</h2>
-    <label>ティーショット</label>
+    <!-- 見出し「リフレクションシート（自由記述）」は削除（要望C5） -->
+    <label style="margin-top:0;">ティーショット</label>
     <textarea class="refText" data-key="tee" rows="2" placeholder="例：右へのミスが多い／良かったホールの共通点など"></textarea>
     <label>セカンドショット</label>
     <textarea class="refText" data-key="second" rows="2" placeholder="例：番手選び、ライの判断、ミスの傾向など"></textarea>
@@ -162,6 +198,7 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
     </div>
     <div class="saved-note" id="rSaved"></div>
   </div>
+  </div><!-- /reflectionForm -->
 </div>
 
 </main>
@@ -187,9 +224,13 @@ const FOCUS=[
 ];
 const LS_HEARING="hearRef_hearing";
 const LS_REFLECTION="hearRef_reflection";
+const LS_HEARLIST="hearRef_hearingList";
+const LS_REFLIST="hearRef_reflectionList";
 
 /* ============ ユーティリティ ============ */
 function $(id){ return document.getElementById(id); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function nowStr(){ const d=new Date(); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
 function loadJSON(k,d){ try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;} }
 function saveJSON(k,v){ localStorage.setItem(k,JSON.stringify(v)); }
 function esc(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
@@ -210,7 +251,64 @@ function goTab(key){
 }
 
 /* ============ ヒアリングシート ============ */
-let hearing=loadJSON(LS_HEARING,{name:"",y:"",m:"",d:"",history:"",avgScore:"",freq:"",course:"",focus:[],focusOther:"",issues:"",episode:"",goal:""});
+const EMPTY_HEARING=()=>({id:uid(),name:"",y:"",m:"",d:"",history:"",avgScore:"",freq:"",course:"",focus:[],focusOther:"",issues:"",episode:"",goal:""});
+let hearing=loadJSON(LS_HEARING,EMPTY_HEARING());
+if(!hearing.id)hearing.id=uid();
+let hearingList=loadJSON(LS_HEARLIST,[]);
+// 入力があれば過去分リストへ上書き保存（idで同一シートを更新）
+function hearingHasContent(){
+  return !!(hearing.name||hearing.y||hearing.history||hearing.avgScore||hearing.freq||hearing.course||hearing.focus.length||hearing.focusOther||hearing.issues||hearing.episode||hearing.goal);
+}
+function upsertHearing(){
+  if(!hearingHasContent())return;
+  const entry={id:hearing.id,savedAt:nowStr(),data:JSON.parse(JSON.stringify(hearing))};
+  const i=hearingList.findIndex(x=>x.id===hearing.id);
+  if(i>=0)hearingList[i]=entry; else hearingList.unshift(entry);
+  saveJSON(LS_HEARLIST,hearingList);
+}
+function showHearingView(mode){
+  $("hSubNew").classList.toggle("active",mode==="form");
+  $("hSubHist").classList.toggle("active",mode==="list");
+  $("hearingForm").style.display=(mode==="form")?"block":"none";
+  $("hearingHistory").style.display=(mode==="list")?"block":"none";
+  if(mode==="list")renderHearingList();
+  window.scrollTo(0,0);
+}
+function newHearing(){
+  collectHearing(); upsertHearing();          // 現在の内容を過去分へ退避
+  hearing=EMPTY_HEARING();
+  saveJSON(LS_HEARING,hearing);
+  renderHearing(); showHearingView("form");
+}
+function renderHearingList(){
+  const el=$("hearingListEl");
+  if(!hearingList.length){el.innerHTML='<div class="small">過去分はありません。</div>';return;}
+  el.innerHTML=hearingList.map(e=>{
+    const d=e.data||{};
+    const date=(d.y||d.m||d.d)?`${d.y||"?"}/${d.m||"?"}/${d.d||"?"}`:"-";
+    return `<div class="hist-item" onclick="loadPastHearing('${e.id}')">
+      <div class="name">${esc(d.name||"（名前未入力）")}</div>
+      <div class="sub">参加日：${esc(date)}　保存：${esc(e.savedAt||"-")}</div>
+      <div class="grid2">
+        <button class="action-btn light" style="min-height:40px;margin:0;" onclick="event.stopPropagation();loadPastHearing('${e.id}')">開く</button>
+        <button class="action-btn secondary" style="min-height:40px;margin:0;" onclick="event.stopPropagation();deletePastHearing('${e.id}')">削除</button>
+      </div></div>`;
+  }).join("");
+}
+function loadPastHearing(id){
+  const e=hearingList.find(x=>x.id===id); if(!e)return;
+  collectHearing(); upsertHearing();          // 現在編集中の内容も退避
+  hearing=JSON.parse(JSON.stringify(e.data)); hearing.id=e.id;
+  saveJSON(LS_HEARING,hearing);
+  renderHearing(); showHearingView("form");
+}
+function deletePastHearing(id){
+  const e=hearingList.find(x=>x.id===id);
+  if(!confirm(`「${(e&&e.data&&e.data.name)||"名前未入力"}」の過去分を削除しますか？`))return;
+  hearingList=hearingList.filter(x=>x.id!==id);
+  saveJSON(LS_HEARLIST,hearingList);
+  renderHearingList();
+}
 function renderHearing(){
   $("hName").value=hearing.name||"";
   $("hDateY").value=hearing.y||""; $("hDateM").value=hearing.m||""; $("hDateD").value=hearing.d||"";
@@ -250,25 +348,82 @@ function collectHearing(){
   hearing.goal=$("hGoal").value.trim();
   const other=$("hFocusOther"); if(other)hearing.focusOther=other.value.trim();
 }
-function saveHearing(){ collectHearing(); saveJSON(LS_HEARING,hearing); flashSaved("hSaved"); }
+function saveHearing(){ collectHearing(); saveJSON(LS_HEARING,hearing); upsertHearing(); flashSaved("hSaved"); }
 function clearHearing(){
   if(!confirm("ヒアリングシートの入力内容をクリアしますか？"))return;
-  hearing={name:"",y:"",m:"",d:"",history:"",avgScore:"",freq:"",course:"",focus:[],focusOther:"",issues:"",episode:"",goal:""};
+  hearing=EMPTY_HEARING();
   saveJSON(LS_HEARING,hearing); renderHearing();
 }
 
 /* ============ リフレクションシート ============ */
-let reflection=loadJSON(LS_REFLECTION,{tee:"",second:"",approach:"",putt:"",summary:""});
+const EMPTY_REFLECTION=()=>({id:uid(),tee:"",second:"",approach:"",putt:"",summary:""});
+let reflection=loadJSON(LS_REFLECTION,EMPTY_REFLECTION());
+if(!reflection.id)reflection.id=uid();
+let reflectionList=loadJSON(LS_REFLIST,[]);
 function renderReflection(){
   document.querySelectorAll(".refText").forEach(t=>t.value=reflection[t.dataset.key]||"");
 }
+function reflectionHasContent(){
+  return !!(reflection.tee||reflection.second||reflection.approach||reflection.putt||reflection.summary);
+}
+function upsertReflection(){
+  if(!reflectionHasContent())return;
+  const entry={id:reflection.id,savedAt:nowStr(),data:JSON.parse(JSON.stringify(reflection))};
+  const i=reflectionList.findIndex(x=>x.id===reflection.id);
+  if(i>=0)reflectionList[i]=entry; else reflectionList.unshift(entry);
+  saveJSON(LS_REFLIST,reflectionList);
+}
+function showReflectionView(mode){
+  $("rSubNew").classList.toggle("active",mode==="form");
+  $("rSubHist").classList.toggle("active",mode==="list");
+  $("reflectionForm").style.display=(mode==="form")?"block":"none";
+  $("reflectionHistory").style.display=(mode==="list")?"block":"none";
+  if(mode==="list")renderReflectionList();
+  window.scrollTo(0,0);
+}
+function newReflection(){
+  document.querySelectorAll(".refText").forEach(t=>reflection[t.dataset.key]=t.value.trim());
+  upsertReflection();
+  reflection=EMPTY_REFLECTION();
+  saveJSON(LS_REFLECTION,reflection);
+  renderReflection(); showReflectionView("form");
+}
+function renderReflectionList(){
+  const el=$("reflectionListEl");
+  if(!reflectionList.length){el.innerHTML='<div class="small">過去分はありません。</div>';return;}
+  el.innerHTML=reflectionList.map(e=>{
+    const d=e.data||{};
+    const head=(d.summary||d.tee||d.second||d.approach||d.putt||"").slice(0,24)||"（未入力）";
+    return `<div class="hist-item" onclick="loadPastReflection('${e.id}')">
+      <div class="name">${esc(head)}</div>
+      <div class="sub">保存：${esc(e.savedAt||"-")}</div>
+      <div class="grid2">
+        <button class="action-btn light" style="min-height:40px;margin:0;" onclick="event.stopPropagation();loadPastReflection('${e.id}')">開く</button>
+        <button class="action-btn secondary" style="min-height:40px;margin:0;" onclick="event.stopPropagation();deletePastReflection('${e.id}')">削除</button>
+      </div></div>`;
+  }).join("");
+}
+function loadPastReflection(id){
+  const e=reflectionList.find(x=>x.id===id); if(!e)return;
+  document.querySelectorAll(".refText").forEach(t=>reflection[t.dataset.key]=t.value.trim());
+  upsertReflection();
+  reflection=JSON.parse(JSON.stringify(e.data)); reflection.id=e.id;
+  saveJSON(LS_REFLECTION,reflection);
+  renderReflection(); showReflectionView("form");
+}
+function deletePastReflection(id){
+  if(!confirm("この過去分を削除しますか？"))return;
+  reflectionList=reflectionList.filter(x=>x.id!==id);
+  saveJSON(LS_REFLIST,reflectionList);
+  renderReflectionList();
+}
 function saveReflection(){
   document.querySelectorAll(".refText").forEach(t=>reflection[t.dataset.key]=t.value.trim());
-  saveJSON(LS_REFLECTION,reflection); flashSaved("rSaved");
+  saveJSON(LS_REFLECTION,reflection); upsertReflection(); flashSaved("rSaved");
 }
 function clearReflection(){
   if(!confirm("リフレクションシートの入力内容をクリアしますか？"))return;
-  reflection={tee:"",second:"",approach:"",putt:"",summary:""};
+  reflection=EMPTY_REFLECTION();
   saveJSON(LS_REFLECTION,reflection); renderReflection();
 }
 
@@ -277,14 +432,14 @@ document.addEventListener("DOMContentLoaded",()=>{
   renderTabs("hearing");
   renderHearing();
   renderReflection();
-  // ヒアリング自動保存
+  // ヒアリング自動保存（過去分リストにも反映）
   ["hName","hDateY","hDateM","hDateD","hHistory","hAvgScore","hCourse","hIssues","hEpisode","hGoal"].forEach(id=>{
-    const el=$(id); if(el)el.addEventListener("input",()=>{collectHearing();saveJSON(LS_HEARING,hearing);});
+    const el=$(id); if(el)el.addEventListener("input",()=>{collectHearing();saveJSON(LS_HEARING,hearing);upsertHearing();});
   });
-  $("hFocusList").addEventListener("change",()=>{collectHearing();saveJSON(LS_HEARING,hearing);});
-  // リフレクション自動保存
+  $("hFocusList").addEventListener("change",()=>{collectHearing();saveJSON(LS_HEARING,hearing);upsertHearing();});
+  // リフレクション自動保存（過去分リストにも反映）
   document.querySelectorAll(".refText").forEach(t=>t.addEventListener("input",()=>{
-    reflection[t.dataset.key]=t.value.trim(); saveJSON(LS_REFLECTION,reflection);
+    reflection[t.dataset.key]=t.value.trim(); saveJSON(LS_REFLECTION,reflection); upsertReflection();
   }));
 });
 </script>
