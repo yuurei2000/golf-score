@@ -66,6 +66,9 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
 .grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;}
 .grid2 .action-btn,.grid3 .action-btn,.grid4 .action-btn{margin:0;}
+/* 常に3列（モバイルでも折り返さない）：ゴルフ場カードのボタン列用 */
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+.row3 .action-btn{margin:0;padding:10px 4px;font-size:13px;white-space:nowrap;}
 
 .badge{display:inline-block;padding:4px 10px;border-radius:999px;background:#eef2f6;color:#344054;font-size:12px;font-weight:700;}
 .pill{display:inline-block;padding:5px 10px;border-radius:999px;background:#ecfdf3;color:#027a48;font-weight:700;font-size:12px;margin:2px;}
@@ -153,7 +156,8 @@ details.detail-box .inner{padding:0 12px 12px;}
 /* 1打目からのクラブ・結果履歴（要望I3） */
 #strokeSeq{font-size:14px;font-weight:700;color:#344054;margin-bottom:6px;min-height:1.2em;line-height:1.5;}
 #strokeLabel .par-tag{font-size:15px;font-weight:800;color:#344054;margin-left:10px;}
-#cumScore{font-size:15px;font-weight:800;margin-bottom:2px;min-height:1.2em;}
+/* 前ホールまでの累計：「1打目 Par4」の行の右端に +2 のみ表示（打目と同サイズ） */
+#cumScore{font-size:21px;font-weight:800;margin-left:auto;}
 #cumScore .plus{color:var(--danger);} #cumScore .minus{color:var(--primary);}
 #strokeLabel .edit-tag{font-size:13px;color:var(--accent);margin-left:6px;}
 #strokeLabel.flash{animation:strokePop 1s ease;}
@@ -221,7 +225,7 @@ td.hno{font-weight:800;background:#f9fafb;}
 <main>
 
 <!-- ============ 基本情報（名前＋クラブ） ============ -->
-<div class="screen" id="scrClubs">
+<div class="screen active" id="scrClubs">
   <div class="card">
     <!-- 見出し「基本情報」は削除（要望20260718 D2） -->
     <label style="margin-top:0;">お名前</label>
@@ -238,7 +242,7 @@ td.hno{font-weight:800;background:#f9fafb;}
   </div>
   <div class="card">
     <button class="action-btn" onclick="saveMyClubs()">この内容で保存</button>
-    <button class="action-btn secondary small" onclick="renderCourseSelect();showScreen('scrCourseSelect')">コース選択へ戻る</button>
+    <button class="action-btn secondary small" onclick="renderCourseMaster();showScreen('scrCourseMaster')">ゴルフ場情報へ戻る</button>
   </div>
 </div>
 
@@ -263,17 +267,7 @@ td.hno{font-weight:800;background:#f9fafb;}
   </div>
 </div>
 
-<!-- ============ ゴルフ場情報：トップ（要望20260718-2 D2/D4/D5） ============ -->
-<div class="screen active" id="scrCourseSelect">
-  <div class="subtab-row" data-sub="course"></div>
-  <div class="card">
-    <button class="action-btn light" style="margin:0;" onclick="startNewCourse()">＋ 新しいゴルフ場を登録</button>
-  </div>
-  <div id="resumeArea"></div>
-  <div class="card">
-    <div id="courseTopList"></div>
-  </div>
-</div>
+<!-- トップページは廃止（要望20260718-3 G2）。ゴルフ場情報タブはゴルフ場マスタを初期表示 -->
 
 <!-- ============ ゴルフ場編集 ============ -->
 <div class="screen" id="scrCourseEdit">
@@ -302,7 +296,7 @@ td.hno{font-weight:800;background:#f9fafb;}
     <h2>ホール情報</h2>
     <div class="wide"><table id="holeTable"></table></div>
     <button class="action-btn" onclick="saveCourse()">この内容で保存</button>
-    <button class="action-btn secondary small" onclick="showScreen('scrCourseSelect')">キャンセル</button>
+    <button class="action-btn secondary small" onclick="renderCourseMaster();showScreen('scrCourseMaster')">キャンセル</button>
   </div>
 </div>
 
@@ -340,14 +334,14 @@ td.hno{font-weight:800;background:#f9fafb;}
     <div class="stroke-row">
       <div id="strokeLabel"></div>
       <div id="strokeSeq"></div>
+      <div id="cumScore"></div>
     </div>
-    <div id="cumScore"></div>
     <label class="required" style="margin-top:0;">クラブ</label>
     <div class="btn-grid" id="clubBtns"></div>
     <label class="required">結果</label>
     <div class="btn-grid" id="resultBtns"></div>
     <div id="missBox">
-      <label style="color:var(--warn);">ミス内容（当てはまるものをタップ・後から編集でもOK）</label>
+      <label style="color:var(--warn);">ミス内容</label>
       <label>トラブル</label>
       <div class="btn-grid one-line" id="missSpecialBtns"></div>
       <label>ミス方向</label>
@@ -431,7 +425,7 @@ td.hno{font-weight:800;background:#f9fafb;}
   <div id="sheetArea"></div>
   <div id="refSummarySection"></div>
   <div class="card">
-    <button class="action-btn secondary small" onclick="renderCourseSelect();showScreen('scrCourseSelect')">コース選択へ戻る</button>
+    <button class="action-btn secondary small" onclick="renderCourseMaster();showScreen('scrCourseMaster')">ゴルフ場情報へ戻る</button>
   </div>
 </div>
 
@@ -439,9 +433,11 @@ td.hno{font-weight:800;background:#f9fafb;}
 <div class="screen" id="scrCourseMaster">
   <div class="subtab-row" data-sub="course"></div>
   <div class="card">
-    <h2>ゴルフ場マスタ</h2>
+    <button class="action-btn light" style="margin:0;" onclick="startNewCourse()">＋ 新しいゴルフ場を登録</button>
+  </div>
+  <div id="resumeArea"></div>
+  <div class="card">
     <div id="masterList"></div>
-    <button class="action-btn light" onclick="startNewCourse()">＋ 新しいゴルフ場を登録</button>
   </div>
 </div>
 
@@ -492,8 +488,8 @@ const RESULTS = [
   { key:"×", score:0.0, cls:"r-ng" }
 ];
 const MISS_DIR = ["左","右","ひっかけ","ショート","オーバー"];
-const MISS_HIT = ["ダフリ","トップ","チョロ","シャンク","当たり良好"];
-const MISS_SPECIAL = ["バンカー入り","池ポチャ","OB"];
+const MISS_HIT = ["ダフリ","トップ","チョロ","シャンク","プッシュ"];
+const MISS_SPECIAL = ["バンカー","池ポチャ","OB"];
 const MISS_CAUSE = ["技術ミス","判断ミス","メンタル・連鎖"];
 const DIST_BANDS = ["50y以下","50-100y","100-150y","150-200y","200y以上"];
 const SLOPES = ["平坦","つま先上がり","つま先下がり","左足上がり","左足下がり"];
@@ -525,13 +521,13 @@ const LS_INTENT = "golfRef_intent";
 const TABS=[
   {key:"basic",label:"基本情報",screen:"scrClubs"},
   {key:"intent",label:"目標",screen:"scrIntent"},
-  {key:"course",label:"ゴルフ場情報",screen:"scrCourseSelect"},
+  {key:"course",label:"ゴルフ場情報",screen:"scrCourseMaster"},
   {key:"start",label:"ラウンド開始",screen:"scrRoundSetup"},
   {key:"hole",label:"ホール入力",screen:"scrRecord"},
   {key:"result",label:"最終結果",screen:"scrReflection"},
   {key:"summary",label:"共有",screen:"scrReflection"}
 ];
-const SCREEN2TAB={scrClubs:"basic",scrIntent:"intent",scrCourseSelect:"course",scrCourseEdit:"course",
+const SCREEN2TAB={scrClubs:"basic",scrIntent:"intent",scrCourseEdit:"course",
   scrCourseMaster:"course",scrHistory:"course",scrRoundSetup:"start",scrRecord:"hole",scrReflection:"result"};
 // ゴルフ場情報タブの下位タブ（「ゴルフ場マスタ」「過去ラウンド」の2つのみ・要望20260718-2 D3）
 const COURSE_SUBTABS=[
@@ -571,7 +567,7 @@ function showScreen(id){
   document.getElementById(id).classList.add("active");
   document.getElementById("recordFooter").classList.toggle("visible", id==="scrRecord");
   // ヘッダー名は固定（現在地はタブのハイライトで示す）
-  if(id==="scrCourseSelect") renderCourseSelect();
+  if(id==="scrCourseMaster") renderCourseMaster();
   renderTabs(SCREEN2TAB[id]||null);
   renderCourseSubtabs(id);   // ゴルフ場情報タブの下位タブ
   window.scrollTo(0,0);
@@ -610,11 +606,11 @@ function goTab(key){
   switch(key){
     case "basic": renderBasicInfo(); showScreen("scrClubs"); break;
     case "intent": renderIntent(); showScreen("scrIntent"); break;
-    case "course": renderCourseSelect(); showScreen("scrCourseSelect"); break;
+    case "course": renderCourseMaster(); showScreen("scrCourseMaster"); break;
     case "start":
       if(setupSel.courseId){ showScreen("scrRoundSetup"); }
       else if(round){ alert("ラウンド進行中です。「ホール入力」タブへ。"); }
-      else { alert("先に「ゴルフ場登録」でコースを選択してください。"); renderCourseSelect(); showScreen("scrCourseSelect"); }
+      else { alert("先に「ゴルフ場登録」でコースを選択してください。"); renderCourseMaster(); showScreen("scrCourseMaster"); }
       break;
     case "hole":
       if(round){ initRecordScreen(); showScreen("scrRecord"); }
@@ -636,7 +632,7 @@ function onNavBtn(){
     if(!confirm("ゴルフ場選択へ戻りますか？（入力途中のショットは破棄されます。登録済みデータは保存されています）")) return;
     cancelEdit();
   }
-  renderCourseSelect(); showScreen("scrCourseSelect");
+  renderCourseMaster(); showScreen("scrCourseMaster");
 }
 function buildBtns(containerId, options, onSelect, opts={}){
   const el=document.getElementById(containerId); el.innerHTML="";
@@ -770,7 +766,7 @@ function saveIntent(){
   // 進行中ラウンドがあれば反映
   if(round){ round.intent=JSON.parse(JSON.stringify(intent)); saveJSON(LS_CURRENT,round); }
   alert("保存しました");
-  renderCourseSelect(); showScreen("scrCourseSelect");
+  renderCourseMaster(); showScreen("scrCourseMaster");
 }
 
 /* ============ ゴルフ場選択・マスタ ============ */
@@ -782,32 +778,19 @@ function renderResume(){
       <div class="sub">${esc(round.date)}　記録済み ${round.shots.length}ショット　現在 ${round.curHole}H</div></div></div>`;
   } else area.innerHTML="";
 }
-function renderCourseSelect(){
-  renderResume();
-  // 登録済みゴルフ場を一覧表示し、各カードに「ラウンド開始」ボタン（要望20260718-2 D2/D4）
-  const el=document.getElementById("courseTopList"); if(!el)return;
-  if(!courses.length){
-    el.innerHTML='<div class="small">登録済みゴルフ場はありません。上の「＋ 新しいゴルフ場を登録」から登録してください。</div>';
-    return;
-  }
-  el.innerHTML=courses.map(c=>`
-    <div class="course-item" onclick="chooseCourse('${c.id}')">
-      <div class="name">${esc(c.name)}</div>
-      <div class="sub">${c.courseNames.join("・")}　ティー：${c.tees.join("/")}</div>
-      <button class="action-btn" style="min-height:44px;margin:8px 0 0;" onclick="event.stopPropagation();chooseCourse('${c.id}')">ラウンド開始</button>
-    </div>`).join("");
-}
+// ゴルフ場マスタ＝ゴルフ場情報の初期表示（要望20260718-3 G2/D2/D3/D4）
+// 一番上の＋登録ボタンはHTML側。一覧の各カードに「ラウンド開始」＋編集/削除
 function renderCourseMaster(){
-  const el=document.getElementById("masterList");
-  if(!courses.length){ el.innerHTML=`<div class="small">登録済みゴルフ場はありません。「新規登録」から登録してください。</div>`; return; }
+  renderResume();
+  const el=document.getElementById("masterList"); if(!el)return;
+  if(!courses.length){ el.innerHTML=`<div class="small">登録済みゴルフ場はありません。上の「＋ 新しいゴルフ場を登録」から登録してください。</div>`; return; }
   el.innerHTML=courses.map(c=>`
     <div class="course-item" onclick="chooseCourse('${c.id}')">
       <div class="name">${esc(c.name)}</div>
-      <div class="sub">${esc(c.pref||"")}　${c.courseNames.join("・")}　ティー：${c.tees.join("/")}<br>
-        <span class="pill ${c.confirmed?"":"warn"}">${c.confirmed?"確認済み":"未確認"}</span>
+      <div class="sub">${c.courseNames.join("・")}　ティー：${c.tees.join("/")}
         <span class="badge">登録日：${esc(c.savedDate)}</span></div>
-      <div class="small" style="margin-top:4px;color:var(--primary);font-weight:700;">タップでこのゴルフ場を選択（ラウンド開始へ）</div>
-      <div class="grid2" style="margin-top:8px;">
+      <div class="row3" style="margin-top:8px;">
+        <button class="action-btn small" onclick="event.stopPropagation();chooseCourse('${c.id}')">ラウンド開始</button>
         <button class="action-btn light small" onclick="event.stopPropagation();editCourse('${c.id}')">編集</button>
         <button class="action-btn danger small" onclick="event.stopPropagation();deleteCourse('${c.id}')">削除</button>
       </div>
@@ -932,7 +915,7 @@ function saveCourse(){
   const idx=courses.findIndex(x=>x.id===editingCourse.id);
   if(idx>=0)courses[idx]=editingCourse; else courses.push(editingCourse);
   saveJSON(LS_COURSES,courses);
-  showScreen("scrCourseSelect");
+  renderCourseMaster(); showScreen("scrCourseMaster");
 }
 
 /* ============ OCR（スコアカード読取） ============ */
@@ -1312,7 +1295,7 @@ function updateCumScore(){
   if(!any){ el.innerHTML=""; return; }
   const cls=diff>0?"plus":"minus";
   const txt=diff>0?`+${diff}`:(diff===0?"±0":`${diff}`);
-  el.innerHTML=`前ホールまで <span class="${cls}">${txt}</span>`;
+  el.innerHTML=`<span class="${cls}">${txt}</span>`;   // 「+2」のみ・行の右端に表示
 }
 // 1打目からの使用クラブ・結果を並べて表示（要望I3。例：DR ○ , 5W △ ,…）
 function updateStrokeSeq(){
@@ -1697,7 +1680,7 @@ function clearAllData(){
   if(!confirm("進行中ラウンドの全記録を削除します。よろしいですか？"))return;
   if(!confirm("本当に削除しますか？この操作は取り消せません。"))return;
   round=null; localStorage.removeItem(LS_CURRENT);
-  renderCourseSelect(); showScreen("scrCourseSelect");
+  renderCourseMaster(); showScreen("scrCourseMaster");
 }
 
 /* ============ 集計 ============ */
