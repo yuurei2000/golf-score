@@ -50,6 +50,9 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
 /* ティーボタンを1行で表示（要望A2/G3） */
 .one-line{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;}
 .one-line .opt-btn{flex:0 0 auto;min-width:0;padding:6px 10px;font-size:13px;min-height:40px;white-space:nowrap;}
+/* 横スクロールさせず1行に収める（要望20260718 I2：ミス方向・ミス当たり） */
+.fit-line{flex-wrap:nowrap !important;gap:4px !important;}
+.fit-line .opt-btn,#scrRecord .fit-line .opt-btn{flex:1 1 0;min-width:0;padding:6px 2px;font-size:12px;min-height:40px;white-space:nowrap;overflow:hidden;}
 
 /* アクションボタン */
 .action-btn{display:block;width:100%;min-height:52px;border:0;border-radius:14px;padding:13px 14px;font-weight:800;font-size:16px;background:var(--primary);color:#fff;margin:8px 0;}
@@ -162,7 +165,7 @@ details.detail-box .inner{padding:0 12px 12px;}
 }
 /* クラブ選択順の番号バッジ（要望D2/D3：右上に小さくアイコンのような数字） */
 .ord-badge{position:absolute;top:-7px;right:-7px;background:var(--primary);color:#fff;border-radius:999px;min-width:20px;height:20px;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #fff;line-height:1;}
-#clubBtns .opt-btn.selected::after,#clubCatalogArea .opt-btn.selected::after{content:"";}   /* 番号バッジと重なる✓は非表示 */
+#clubCatalogArea .opt-btn.selected::after{content:"";}   /* 基本情報は番号バッジ表示のため✓非表示 */
 .r-ok{color:var(--primary);font-weight:800;}
 .r-tri{color:var(--warn);font-weight:800;}
 .r-ng{color:var(--danger);font-weight:800;}
@@ -220,7 +223,7 @@ td.hno{font-weight:800;background:#f9fafb;}
 <!-- ============ 基本情報（名前＋クラブ） ============ -->
 <div class="screen" id="scrClubs">
   <div class="card">
-    <h2>基本情報</h2>
+    <!-- 見出し「基本情報」は削除（要望20260718 D2） -->
     <label style="margin-top:0;">お名前</label>
     <input type="text" id="biName" placeholder="例：千里太郎">
   </div>
@@ -260,15 +263,15 @@ td.hno{font-weight:800;background:#f9fafb;}
   </div>
 </div>
 
-<!-- ============ ゴルフ場情報：新規登録 ============ -->
-<!-- 作成済みゴルフ場の一覧はここには表示しない（ゴルフ場マスタに表示・要望C2） -->
+<!-- ============ ゴルフ場情報：トップ（要望20260718-2 D2/D4/D5） ============ -->
 <div class="screen active" id="scrCourseSelect">
   <div class="subtab-row" data-sub="course"></div>
+  <div class="card">
+    <button class="action-btn light" style="margin:0;" onclick="startNewCourse()">＋ 新しいゴルフ場を登録</button>
+  </div>
   <div id="resumeArea"></div>
   <div class="card">
-    <h2>ゴルフ場の登録</h2>
-    <button class="action-btn light" onclick="startNewCourse()">＋ 新しいゴルフ場を登録</button>
-    <div class="small">登録済みのゴルフ場は「ゴルフ場マスタ」から選択・編集できます。</div>
+    <div id="courseTopList"></div>
   </div>
 </div>
 
@@ -348,9 +351,9 @@ td.hno{font-weight:800;background:#f9fafb;}
       <label>トラブル</label>
       <div class="btn-grid one-line" id="missSpecialBtns"></div>
       <label>ミス方向</label>
-      <div class="btn-grid one-line" id="missDirBtns"></div>
+      <div class="btn-grid fit-line" id="missDirBtns"></div>
       <label>ミス当たり</label>
-      <div class="btn-grid one-line" id="missHitBtns"></div>
+      <div class="btn-grid fit-line" id="missHitBtns"></div>
     </div>
 
     <details class="detail-box" id="detailBox">
@@ -530,9 +533,8 @@ const TABS=[
 ];
 const SCREEN2TAB={scrClubs:"basic",scrIntent:"intent",scrCourseSelect:"course",scrCourseEdit:"course",
   scrCourseMaster:"course",scrHistory:"course",scrRoundSetup:"start",scrRecord:"hole",scrReflection:"result"};
-// ゴルフ場情報タブの下位タブ（ホール入力ストリップと同デザイン）
+// ゴルフ場情報タブの下位タブ（「ゴルフ場マスタ」「過去ラウンド」の2つのみ・要望20260718-2 D3）
 const COURSE_SUBTABS=[
-  {key:"select",label:"新規登録",screen:"scrCourseSelect"},
   {key:"master",label:"ゴルフ場マスタ",screen:"scrCourseMaster"},
   {key:"history",label:"過去ラウンド",screen:"scrHistory"}
 ];
@@ -576,9 +578,7 @@ function showScreen(id){
 }
 // ゴルフ場情報タブの下位タブ（新規登録／ゴルフ場マスタ／過去ラウンド）
 function renderCourseSubtabs(screenId){
-  // 登録フォーム（scrCourseEdit）でも下位タブを常時表示し「新規登録」を反転（要望D2）
-  const mapped=(screenId==="scrCourseEdit")?"scrCourseSelect":screenId;
-  const active=COURSE_SUBTABS.find(s=>s.screen===mapped);
+  const active=COURSE_SUBTABS.find(s=>s.screen===screenId);
   document.querySelectorAll('.subtab-row[data-sub="course"]').forEach(row=>{
     row.innerHTML=COURSE_SUBTABS.map(s=>
       `<button type="button" class="subtab${active&&s.key===active.key?" active":""}" onclick="goCourseSub('${s.key}')">${esc(s.label)}</button>`
@@ -589,7 +589,6 @@ function goCourseSub(key){
   const s=COURSE_SUBTABS.find(x=>x.key===key); if(!s)return;
   if(key==="master")renderCourseMaster();
   else if(key==="history")renderHistory();
-  else renderCourseSelect();
   showScreen(s.screen);
 }
 // タブバー描画
@@ -784,8 +783,19 @@ function renderResume(){
   } else area.innerHTML="";
 }
 function renderCourseSelect(){
-  // 作成済みゴルフ場の一覧はゴルフ場マスタで表示（要望C2）。ここではラウンド再開のみ
   renderResume();
+  // 登録済みゴルフ場を一覧表示し、各カードに「ラウンド開始」ボタン（要望20260718-2 D2/D4）
+  const el=document.getElementById("courseTopList"); if(!el)return;
+  if(!courses.length){
+    el.innerHTML='<div class="small">登録済みゴルフ場はありません。上の「＋ 新しいゴルフ場を登録」から登録してください。</div>';
+    return;
+  }
+  el.innerHTML=courses.map(c=>`
+    <div class="course-item" onclick="chooseCourse('${c.id}')">
+      <div class="name">${esc(c.name)}</div>
+      <div class="sub">${c.courseNames.join("・")}　ティー：${c.tees.join("/")}</div>
+      <button class="action-btn" style="min-height:44px;margin:8px 0 0;" onclick="event.stopPropagation();chooseCourse('${c.id}')">ラウンド開始</button>
+    </div>`).join("");
 }
 function renderCourseMaster(){
   const el=document.getElementById("masterList");
@@ -1171,18 +1181,15 @@ function resetShotInput(){
     puttDist:null, puttLine:[], puttTouch:[], memo:"" };
 }
 function buildRecordButtons(){
-  buildBtns("clubBtns",getMyClubs(),(v,b,el)=>{
+  // クラブは基本情報での番号順（DR=1…PT=最後）に並べる（要望20260718 G3）。右上の番号バッジは表示しない（G4）
+  const om=clubOrderMap();
+  const orderedClubs=getMyClubs().slice().sort((a,b)=>(om[a]||99)-(om[b]||99));
+  buildBtns("clubBtns",orderedClubs,(v,b,el)=>{
     shot.club=v;selectSingle(el,v);
     // PT選択時はライを自動でグリーンに
     if(v==="PT"){shot.lie="グリーン";selectSingle(document.getElementById("lieBtns"),"グリーン");togglePuttBox();}
-    togglePuttQuick();   // パット入力欄はPT選択時のみ表示（要望G5）
+    togglePuttQuick();   // パット入力欄はPT選択時のみ表示
     updateRegisterState();
-  });
-  // 基本情報で選んだ順の番号を右上バッジで表示（DR=1・PT=最後、要望D2/D3）
-  const om=clubOrderMap();
-  document.querySelectorAll("#clubBtns .opt-btn").forEach(b=>{
-    const n=om[b.dataset.val];
-    if(n)b.insertAdjacentHTML("beforeend",`<span class="ord-badge">${n}</span>`);
   });
   buildBtns("lieBtns",LIES,(v,b,el)=>{shot.lie=v;selectSingle(el,v);togglePuttBox();updateRegisterState();});
   buildBtns("resultBtns",RESULTS.map(r=>r.key),(v,b,el)=>{shot.result=v;selectSingle(el,v);toggleMissBox();updateRegisterState();},{big:true});
@@ -1280,12 +1287,13 @@ function togglePuttBox(){document.getElementById("puttBox").style.display=(shot.
 function flashHoleBar(){}   // ホールバー廃止に伴い無効化
 function updateStrokeLabel(){
   const el=document.getElementById("strokeLabel"); if(!el)return;
+  // 「〇H」はホール選択ストリップと重複のため表示しない（要望20260718 G2）
   if(editState){
     const rec=round.shots[editState.idx];
-    el.innerHTML=`${rec.hole}H ${rec.stroke}打目<span class="par-tag">Par${rec.par||"-"}</span><span class="edit-tag">${editState.isNew?"新規":"編集中"}</span>`;
+    el.innerHTML=`${rec.stroke}打目<span class="par-tag">Par${rec.par||"-"}</span><span class="edit-tag">${editState.isNew?"新規":"編集中"}</span>`;
   } else {
     const par=(round.holes[round.curHole-1]||{}).par;
-    el.innerHTML=`${round.curHole}H ${round.curStroke}打目<span class="par-tag">Par${par||"-"}</span>`;
+    el.innerHTML=`${round.curStroke}打目<span class="par-tag">Par${par||"-"}</span>`;
   }
   updateCumScore();
   updateStrokeSeq();
