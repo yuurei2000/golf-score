@@ -153,10 +153,12 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
   <div class="card no-print">
     <button class="action-btn" onclick="saveHearing()">保存</button>
     <div class="grid2">
+      <button class="action-btn light" onclick="shareHearing()">共有（LINEなど）</button>
       <button class="action-btn light" onclick="window.print()">印刷 / PDF</button>
-      <button class="action-btn secondary" onclick="clearHearing()">クリア</button>
     </div>
+    <button class="action-btn secondary" onclick="clearHearing()">クリア</button>
     <div class="saved-note" id="hSaved"></div>
+    <div class="small">共有はスマホの共有メニュー（LINE・メール等）を開きます。保存した内容は「過去分表示」から開いて再編集できます。</div>
   </div>
   </div><!-- /hearingForm -->
 </div>
@@ -193,10 +195,12 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
   <div class="card no-print">
     <button class="action-btn" onclick="saveReflection()">保存</button>
     <div class="grid2">
+      <button class="action-btn light" onclick="shareReflection()">共有（LINEなど）</button>
       <button class="action-btn light" onclick="window.print()">印刷 / PDF</button>
-      <button class="action-btn secondary" onclick="clearReflection()">クリア</button>
     </div>
+    <button class="action-btn secondary" onclick="clearReflection()">クリア</button>
     <div class="saved-note" id="rSaved"></div>
+    <div class="small">共有はスマホの共有メニュー（LINE・メール等）を開きます。保存した内容は「過去分表示」から開いて再編集できます。</div>
   </div>
   </div><!-- /reflectionForm -->
 </div>
@@ -349,6 +353,45 @@ function collectHearing(){
   const other=$("hFocusOther"); if(other)hearing.focusOther=other.value.trim();
 }
 function saveHearing(){ collectHearing(); saveJSON(LS_HEARING,hearing); upsertHearing(); flashSaved("hSaved"); }
+
+/* ---- 共有（LINEなど）---- */
+// スマホ：OSの共有メニュー（LINE・メール等）／非対応環境：LINEの共有ページを開く＋クリップボードにコピー
+async function shareText(title,text){
+  if(navigator.share){
+    try{ await navigator.share({title,text}); return; }
+    catch(e){ if(e.name==="AbortError")return; }
+  }
+  try{ await navigator.clipboard.writeText(text); }catch(e){}
+  window.open("https://line.me/R/share?text="+encodeURIComponent(text),"_blank");
+}
+function formatHearingText(){
+  collectHearing();
+  const d=(hearing.y||hearing.m||hearing.d)?`${hearing.y||"?"}年${hearing.m||"?"}月${hearing.d||"?"}日`:"";
+  const focus=[...hearing.focus, ...(hearing.focusOther?[`その他（${hearing.focusOther}）`]:[])].join("、");
+  const L=[];
+  L.push("【ヒアリングシート】");
+  if(hearing.name)L.push(`お名前：${hearing.name}`);
+  if(d)L.push(`参加日：${d}`);
+  L.push("■ゴルフ歴・プレースタイル");
+  if(hearing.history)L.push(`・ゴルフ歴：${hearing.history}年`);
+  if(hearing.avgScore)L.push(`・平均スコア：${hearing.avgScore}`);
+  if(hearing.freq)L.push(`・ラウンド頻度：${hearing.freq}`);
+  if(hearing.course)L.push(`・よく行くゴルフ場：${hearing.course}`);
+  if(focus)L.push(`■重点的に見てほしいこと\n${focus}`);
+  if(hearing.issues)L.push(`■課題や悩み\n${hearing.issues}`);
+  if(hearing.episode)L.push(`■直近のラウンドで印象的だった出来事\n${hearing.episode}`);
+  if(hearing.goal)L.push(`■レッスンでの目標・期待\n${hearing.goal}`);
+  return L.join("\n");
+}
+function shareHearing(){ saveHearing(); shareText("ヒアリングシート",formatHearingText()); }
+function formatReflectionText(){
+  document.querySelectorAll(".refText").forEach(t=>reflection[t.dataset.key]=t.value.trim());
+  const L=["【リフレクションシート】"];
+  const items=[["ティーショット",reflection.tee],["セカンドショット",reflection.second],["アプローチ・バンカー",reflection.approach],["パッティング",reflection.putt],["まとめ・次回への意識",reflection.summary]];
+  items.forEach(([k,v])=>{ if(v)L.push(`■${k}\n${v}`); });
+  return L.join("\n");
+}
+function shareReflection(){ saveReflection(); shareText("リフレクションシート",formatReflectionText()); }
 function clearHearing(){
   if(!confirm("ヒアリングシートの入力内容をクリアしますか？"))return;
   hearing=EMPTY_HEARING();
