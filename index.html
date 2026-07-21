@@ -343,9 +343,9 @@ td.hno{font-weight:800;background:#f9fafb;}
     <div id="missBox">
       <label style="color:var(--warn);">ミス内容</label>
       <label>トラブル</label>
-      <div class="btn-grid one-line" id="missSpecialBtns"></div>
+      <div class="btn-grid fit-line" id="missSpecialBtns"></div>
       <label>ミス方向</label>
-      <div class="btn-grid fit-line" id="missDirBtns"></div>
+      <div class="btn-grid" id="missDirBtns"></div>
       <label>ミス当たり</label>
       <div class="btn-grid fit-line" id="missHitBtns"></div>
     </div>
@@ -402,6 +402,8 @@ td.hno{font-weight:800;background:#f9fafb;}
       </span>
     </div>
   </div>
+  <!-- 固定フッターが高くなったぶんの余白（携帯でホールスコア欄が見切れないように・要望20260720 C2） -->
+  <div style="height:120px;"></div>
 </div>
 
 <!-- ============ リフレクションシート ============ -->
@@ -454,7 +456,8 @@ td.hno{font-weight:800;background:#f9fafb;}
 
 <div id="recordFooter">
   <div id="footerHint"></div>
-  <button class="action-btn" id="registerBtn" onclick="onRegisterBtn()" disabled>記録する</button>
+  <button class="action-btn" id="registerBtn" onclick="onRegisterBtn()" disabled>ショットを記録する</button>
+  <button class="action-btn secondary" id="nextHoleBtn" onclick="nextHole()" style="margin-top:6px;">ホール入力終了→次のホールへ</button>
   <div id="roundEndBtns" class="grid2" style="margin-top:6px;">
     <button class="action-btn secondary small" onclick="finishRound()">ラウンド終了</button>
     <button class="action-btn danger small" onclick="clearAllData()">全データクリア</button>
@@ -487,9 +490,10 @@ const RESULTS = [
   { key:"△", score:0.5, cls:"r-tri" },
   { key:"×", score:0.0, cls:"r-ng" }
 ];
-const MISS_DIR = ["左","右","ひっかけ","ショート","オーバー"];
-const MISS_HIT = ["ダフリ","トップ","チョロ","シャンク","プッシュ"];
-const MISS_SPECIAL = ["バンカー","池ポチャ","OB"];
+const MISS_DIR = ["左","右","フック","スライス","プッシュ","ショート","オーバー"];   // ひっかけ削除・フック/スライス/プッシュ追加（要望E3）
+const MISS_DIR_AXES = [["左","右"],["フック","スライス","プッシュ"],["ショート","オーバー"]];   // 各グループ内は排他選択
+const MISS_HIT = ["ダフリ","トップ","チョロ","シャンク","テンプラ"];                 // テンプラ追加（要望E4）
+const MISS_SPECIAL = ["バンカー","池ポチャ","OB","林","ラフ"];                      // 林・ラフ追加（要望E2）
 const MISS_CAUSE = ["技術ミス","判断ミス","メンタル・連鎖"];
 const DIST_BANDS = ["50y以下","50-100y","100-150y","150-200y","200y以上"];
 const SLOPES = ["平坦","つま先上がり","つま先下がり","左足上がり","左足下がり"];
@@ -875,7 +879,7 @@ function renderHoleTable(){
   editingCourse.holes.forEach((h,i)=>{
     if(i===0)html+=`<tr><th colspan="4" style="background:var(--primary2);color:var(--primary);">前半（${esc(cn[0]||"OUT")}）</th></tr>`;
     if(i===9)html+=`<tr><th colspan="4" style="background:var(--primary2);color:var(--primary);border-top:3px solid var(--primary);">後半（${esc(cn[1]||"IN")}）</th></tr>`;
-    html+=`<tr><td class="hno">${h.no}</td>
+    html+=`<tr><td class="hno">${dispHoleFor(h.no,cn)}</td>
       <td><div class="par-seg">${[3,4,5].map(p=>`<button type="button" class="par-btn${h.par===p?" sel":""}" onclick="setPar(${i},${p},this)">${p}</button>`).join("")}</div></td>
       <td><input type="number" inputmode="numeric" value="${h.dist[tee]??""}" placeholder="-" onchange="setHoleDist(${i},this.value)"></td>
       <td><input type="number" inputmode="numeric" value="${h.hdcp}" placeholder="-" onchange="editingCourse.holes[${i}].hdcp=this.value"></td></tr>`;
@@ -1123,7 +1127,7 @@ function renderHolePreview(){
   ordered.forEach((half,k)=>{
     html+=`<tr><th colspan="4" style="background:var(--primary2);color:var(--primary);${k===1?"border-top:3px solid var(--primary);":""}">${k===0?"前半":"後半"}（${esc(half.name)}）</th></tr>`;
     half.holes.forEach(h=>{
-      html+=`<tr><td class="hno">${h.no}</td><td>${h.par}</td><td>${h.dist[setupSel.tee]??"-"}</td><td>${h.hdcp||"-"}</td></tr>`;
+      html+=`<tr><td class="hno">${dispHoleFor(h.no,names)}</td><td>${h.par}</td><td>${h.dist[setupSel.tee]??"-"}</td><td>${h.hdcp||"-"}</td></tr>`;
     });
   });
   document.getElementById("rsHolePreview").innerHTML=html+"</table>";
@@ -1141,7 +1145,7 @@ function startRound(){
     : Array.from({length:18},(_,i)=>i+1);
   round={ id:uid(), date:new Date().toISOString().slice(0,10), player:playerName,
     intent:JSON.parse(JSON.stringify(intent)),
-    courseId:c.id, courseName:c.name, startCourse:setupSel.startCourse,
+    courseId:c.id, courseName:c.name, courseNames:c.courseNames.slice(), startCourse:setupSel.startCourse,
     tee:setupSel.tee, weather:setupSel.weather, condition:setupSel.condition,
     holes:JSON.parse(JSON.stringify(c.holes)),
     holeStatus:{}, holeScore:{}, holeOrder:order, curHole:order[0], curStroke:1, shots:[] };
@@ -1176,7 +1180,7 @@ function buildRecordButtons(){
   });
   buildBtns("lieBtns",LIES,(v,b,el)=>{shot.lie=v;selectSingle(el,v);togglePuttBox();updateRegisterState();});
   buildBtns("resultBtns",RESULTS.map(r=>r.key),(v,b,el)=>{shot.result=v;selectSingle(el,v);toggleMissBox();updateRegisterState();},{big:true});
-  buildBtns("missDirBtns",MISS_DIR,(v,b)=>toggleMulti(shot.missDir,v,b));
+  buildBtns("missDirBtns",MISS_DIR,(v,b,el)=>{shot.missDir=toggleAxisSel(shot.missDir,v,MISS_DIR_AXES,el);});
   buildBtns("missHitBtns",MISS_HIT,(v,b)=>toggleMulti(shot.missHit,v,b));
   buildBtns("missSpecialBtns",MISS_SPECIAL,(v,b)=>toggleMulti(shot.missSpecial,v,b));
   buildBtns("missCauseBtns",MISS_CAUSE,(v,b,el)=>{shot.missCause=v;selectSingle(el,v);});
@@ -1249,7 +1253,7 @@ function registerQuickPutts(){
   document.getElementById("pqRegBtn").disabled=true;
   updateHoleBar();renderShotList();
   // 自動遷移しない。次ホールは上のホール選択で明示的に移動
-  pqHint(`${round.curHole}Hを${n}パットで記録しました。上のホール選択で次のホールへ移動できます`);
+  pqHint(`${dispHole(round.curHole)}Hを${n}パットで記録しました。上のホール選択で次のホールへ移動できます`);
 }
 function selectSlope(v,el){
   const TOE=["つま先上がり","つま先下がり"],FOOT=["左足上がり","左足下がり"];
@@ -1358,6 +1362,18 @@ function updateHoleScoreUI(){
 function holeOrderArr(){
   return (round&&round.holeOrder&&round.holeOrder.length===18)?round.holeOrder:Array.from({length:18},(_,i)=>i+1);
 }
+/* ホール番号の表示変換（要望20260720 A2/A3）：
+   後半コース名が「IN」なら10〜18番のまま、それ以外（芦屋・六甲など）は後半も1〜9番と表記する。
+   内部データは常に1〜18で保持し、表示だけ変換する。 */
+function dispHoleFor(h,names){
+  const back=((names||[])[1]||"IN");
+  return (h>=10&&back!=="IN")?h-9:h;
+}
+function dispHole(h){
+  let names=round&&round.courseNames;
+  if(!names&&round){const c=courses.find(x=>x.id===round.courseId);names=c&&c.courseNames;}
+  return dispHoleFor(h,names);
+}
 function renderHolePicker(scroll){
   const el=document.getElementById("holePickerBtns"); if(!el)return; el.innerHTML="";
   for(const n of holeOrderArr()){
@@ -1365,7 +1381,7 @@ function renderHolePicker(scroll){
     const cnt=round.shots.filter(s=>s.hole===n).length;
     const done=(round.holeStatus&&round.holeStatus[n]);
     b.className="hs-btn"+(n===round.curHole?" cur":"")+((cnt||done)?" has":"");
-    b.innerHTML=`${n}H${cnt?`<span class="n">(${cnt})</span>`:""}`;
+    b.innerHTML=`${dispHole(n)}H${cnt?`<span class="n">(${cnt})</span>`:""}`;
     b.onclick=()=>jumpToHole(n);
     el.appendChild(b);
   }
@@ -1395,10 +1411,11 @@ function updateRegisterState(){
 }
 function updateFooterMode(){
   const editing=!!editState;
-  document.getElementById("registerBtn").textContent=editing?"修正を保存":"記録する";
+  document.getElementById("registerBtn").textContent=editing?"修正を保存":"ショットを記録する";
   const hb=document.getElementById("hbRegBtn"); if(hb)hb.textContent=editing?"保存":"記録";
   document.getElementById("editBtns").style.display=editing?"flex":"none";
   const re=document.getElementById("roundEndBtns"); if(re)re.style.display=editing?"none":"grid";
+  const nh=document.getElementById("nextHoleBtn"); if(nh)nh.style.display=editing?"none":"block";
 }
 function shotFromInput(holeNo,strokeNo){
   const h=round.holes[holeNo-1];
@@ -1604,7 +1621,7 @@ function renderShotList(){
   // 現在のホールのショットだけ表示（要望20260715 D4）。編集中はその打のホール
   const targetHole=editState?round.shots[editState.idx].hole:round.curHole;
   const curShots=round.shots.filter(s=>s.hole===targetHole);
-  document.getElementById("recBadge").textContent=`${targetHole}H：${curShots.length}打`;
+  document.getElementById("recBadge").textContent=`${dispHole(targetHole)}H：${curShots.length}打`;
   if(!curShots.length){el.innerHTML=`<li class="small" style="padding:8px;">このホールの記録はまだありません</li>`;return;}
   const holeNos=[targetHole];
   let html="";
@@ -1630,7 +1647,7 @@ function renderShotList(){
 function undoLastShot(){
   if(!round.shots.length)return;
   const last=round.shots[round.shots.length-1];
-  if(!confirm(`最後の記録（${last.hole}H ${last.stroke}打目 ${last.club||"未入力"}）を削除しますか？`))return;
+  if(!confirm(`最後の記録（${dispHole(last.hole)}H ${last.stroke}打目 ${last.club||"未入力"}）を削除しますか？`))return;
   round.shots.pop();
   round.curHole=last.hole; round.curStroke=last.stroke;
   saveJSON(LS_CURRENT,round);
@@ -1645,7 +1662,7 @@ function nextHole(){
   jumpToHole(o[i+1]);
 }
 function abandonHole(){
-  if(!confirm(`${round.curHole}Hを途中終了（ギブアップ／ピックアップ）しますか？\n記録済みショットは保持されます。`))return;
+  if(!confirm(`${dispHole(round.curHole)}Hを途中終了（ギブアップ／ピックアップ）しますか？\n記録済みショットは保持されます。`))return;
   round.holeStatus[round.curHole]="途中終了";
   saveJSON(LS_CURRENT,round);
   renderShotList();
@@ -1811,7 +1828,8 @@ function renderSheet(r){
   const st=roundStats(r);
   // ホール別：前半・後半の小計と全体スコアを表示（要望）
   let holeRows="";
-  const holeRow=h=>`<tr><td class="hno">${h.hole}</td><td>${h.par||"-"}</td>
+  const shNames=r.courseNames||((courses.find(c=>c.id===r.courseId)||{}).courseNames);
+  const holeRow=h=>`<tr><td class="hno">${dispHoleFor(h.hole,shNames)}</td><td>${h.par||"-"}</td>
       <td>${h.status?`<span style="color:var(--warn);font-weight:700;">${h.status}(${h.strokes})</span>`:h.strokes}${h.penalty?`<span class="small">(内P${h.penalty})</span>`:""}</td>
       <td>${h.putts}</td><td style="font-size:12px;">${esc(h.marks)}</td></tr>`;
   const subRow=(label,arr,strong)=>{
@@ -1933,7 +1951,7 @@ function drawSheetCanvas(r){
   const cvHoleRow=h=>{
     y+=lh;
     g.fillStyle="#16202a";
-    g.fillText(String(h.hole),cols[0],y);
+    g.fillText(String(dispHoleFor(h.hole,r.courseNames||((courses.find(c=>c.id===r.courseId)||{}).courseNames))),cols[0],y);
     g.fillText(String(h.par||"-"),cols[1],y);
     if(h.status){g.fillStyle="#b54708";g.fillText(`${h.status}(${h.strokes})`,cols[2],y);}
     else g.fillText(String(h.strokes),cols[2],y);
