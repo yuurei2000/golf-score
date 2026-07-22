@@ -21,7 +21,7 @@ h1{font-size:15px;margin:0;font-weight:800;color:#fff;letter-spacing:.01em;white
 /* タブナビゲーション */
 #tabBar{position:sticky;top:49px;z-index:29;background:#fff;border-bottom:1px solid var(--line);padding:8px 10px;display:none;}
 #tabBar.show{display:block;}
-.tab-row{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;}
+.tab-row{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:10px;}   /* スクロールバーがタブ文字に重ならない余白（要望20260722 I2） */
 .tab-pill{flex:0 0 auto;border:1.5px solid var(--line);background:#eef2f6;color:#344054;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:800;white-space:nowrap;cursor:pointer;}
 .tab-pill.active{background:var(--primary);color:#fff;border-color:var(--primary);}
 .tab-pill.done{border-color:var(--primary-border);}
@@ -49,6 +49,10 @@ button{font:inherit;touch-action:manipulation;cursor:pointer;}
 .subtab.active{background:var(--primary2);color:var(--primary);border-color:var(--primary);}  /* 選択時は薄緑（要望C3） */
 /* ティーボタンを1行で表示（要望A2/G3） */
 .one-line{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;}
+/* PT選択時：詳細を入力の項目を隠しパット詳細だけ表示（要望20260722 K2/K3） */
+#detailBox.pt-mode>summary{display:none;}
+#detailBox.pt-mode>.inner>*{display:none;}
+#detailBox.pt-mode>.inner>#puttBox{display:block !important;}
 .one-line .opt-btn{flex:0 0 auto;min-width:0;padding:6px 10px;font-size:13px;min-height:40px;white-space:nowrap;}
 /* 横スクロールさせず1行に収める（要望20260718 I2：ミス方向・ミス当たり） */
 .fit-line{flex-wrap:nowrap !important;gap:4px !important;}
@@ -350,6 +354,7 @@ td.hno{font-weight:800;background:#f9fafb;}
       <div class="btn-grid fit-line" id="missHitBtns"></div>
     </div>
 
+    <!-- PT選択時は「詳細を入力」を出さずパット詳細だけを直接表示（要望20260722 K2/K3） -->
     <details class="detail-box" id="detailBox">
       <summary>詳細を入力</summary>
       <div class="inner">
@@ -505,7 +510,7 @@ const PUTT_LINE_AXES = [["ストレート","スライス","フック"],["上り"
 const PUTT_TOUCH = ["ジャスト","ショート","オーバー","右外れ","左外れ"];
 const PUTT_TOUCH_AXES = [["ジャスト","ショート","オーバー"],["右外れ","左外れ"]];
 const PQ_COUNTS = ["0","1","2","3","4"];
-const WEATHERS = ["晴","曇","雨","風強"];
+const WEATHERS = ["晴","曇","雨","強風"];   // 「風強」→「強風」（要望20260722 C2）
 const CONDITIONS = ["絶好調","普通","不調"];
 const DEFAULT_TEES = ["バック(黒)","レギュラー(白)","レディース(赤)","フロント(金)"];
 const OCR_TEE_MAP = { black:"Black", white:"White", red:"Red", frontTee:"Front", ladies:"Ladies" };
@@ -816,7 +821,10 @@ function startNewCourse(){
 }
 function editCourse(id){
   editingCourse=JSON.parse(JSON.stringify(courses.find(x=>x.id===id)));
-  editingTeeIdx=0; renderCourseEdit(); showScreen("scrCourseEdit");
+  // 最後に選んだティーを保持（要望20260722 A4：以前は常にバックに戻っていた）
+  const li=editingCourse.tees.indexOf(editingCourse.lastTee);
+  editingTeeIdx=(li>=0)?li:0;
+  renderCourseEdit(); showScreen("scrCourseEdit");
 }
 function renderCourseEdit(){
   const c=editingCourse;
@@ -844,6 +852,7 @@ function renderTeeList(){
           editingCourse.tees[i]=nv.trim();
         }
       } else editingTeeIdx=i;
+      editingCourse.lastTee=editingCourse.tees[editingTeeIdx];   // 選択ティーを保持（要望20260722 A4）
       renderTeeList(); renderHoleTable();
     };
     el.appendChild(b);
@@ -914,6 +923,7 @@ function saveCourse(){
   editingCourse.name=name;
   const c2=document.getElementById("ceCourseSecond").value.trim()||"IN";
   editingCourse.courseNames=[c1,c2];
+  editingCourse.lastTee=editingCourse.tees[editingTeeIdx];   // 選択中ティーを保存（要望20260722 A4）
   editingCourse.confirmed=true;
   editingCourse.savedDate=new Date().toISOString().slice(0,10);
   const idx=courses.findIndex(x=>x.id===editingCourse.id);
@@ -1175,6 +1185,7 @@ function buildRecordButtons(){
     shot.club=v;selectSingle(el,v);
     // PT選択時はライを自動でグリーンに
     if(v==="PT"){shot.lie="グリーン";selectSingle(document.getElementById("lieBtns"),"グリーン");togglePuttBox();}
+    togglePtDetail();    // PT選択時は「詳細を入力」を出さずパット詳細だけ表示（要望20260722 K2/K3）
     togglePuttQuick();   // パット入力欄はPT選択時のみ表示
     updateRegisterState();
   });
@@ -1271,6 +1282,13 @@ function toggleMulti(arr,v,btn){
 }
 function toggleMissBox(){document.getElementById("missBox").style.display=(shot.result==="△"||shot.result==="×")?"block":"none";}
 function togglePuttBox(){document.getElementById("puttBox").style.display=(shot.lie==="グリーン")?"block":"none";}
+// クラブPT選択時：詳細を入力の項目は表示せず、パット詳細だけを直接表示（要望20260722 K2/K3）
+function togglePtDetail(){
+  const d=document.getElementById("detailBox"); if(!d)return;
+  const pt=!!(shot&&shot.club==="PT");
+  d.classList.toggle("pt-mode",pt);
+  if(pt)d.setAttribute("open","");
+}
 function flashHoleBar(){}   // ホールバー廃止に伴い無効化
 function updateStrokeLabel(){
   const el=document.getElementById("strokeLabel"); if(!el)return;
@@ -1458,7 +1476,7 @@ function loadShotToInput(rec){
   document.getElementById("slopeBtns").querySelectorAll(".opt-btn").forEach(b=>b.classList.toggle("selected",shot.slope.includes(b.dataset.val)));
   selectSingle(document.getElementById("ballBtns"),shot.ball);
   selectSingle(document.getElementById("aimBtns"),shot.aim);
-  toggleMissBox(); togglePuttBox();
+  toggleMissBox(); togglePuttBox(); togglePtDetail();
   document.getElementById("detailBox").setAttribute("open","");   // 編集時は詳細を開いた状態にする
 }
 function clearInputUI(){
@@ -1469,6 +1487,7 @@ function clearInputUI(){
   document.getElementById("missBox").style.display="none";
   document.getElementById("puttBox").style.display="none";
   document.getElementById("detailBox").removeAttribute("open");
+  document.getElementById("detailBox").classList.remove("pt-mode");
   // パットまとめ入力の選択もリセットし、カードを隠す（PT選択で再表示）
   pqCount=null; pqResults=[];
   clearSel("pqCountBtns");
@@ -1766,30 +1785,85 @@ function pieChartSVG(entries,size){
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${paths}</svg>`;
 }
 function clubUseEntries(st){
-  return Object.entries(st.clubStat).map(([c,s])=>[c,s.n]).sort((a,b)=>b[1]-a[1]);
+  // 使っていない登録クラブも「0回（0％）」で表示する（要望20260722 G2）
+  const entries=Object.entries(st.clubStat).map(([c,s])=>[c,s.n]);
+  getMyClubs().forEach(c=>{ if(!st.clubStat[c])entries.push([c,0]); });
+  const om=clubOrderMap();
+  return entries.sort((a,b)=>(b[1]-a[1])||((om[a[0]]||99)-(om[b[0]]||99)));
 }
 // スコア別ゴルフ基準値一覧（要望K3の表より）：目標スコアごとの基準値
+// variants＝同じ目標スコアに到達する別パターンの行（パット内訳・備考が異なる）。
+// 比較時は実績（パット数・1パット・3パット数）に最も近い行を自動選択する（要望20260722）。
 const BENCHMARKS=[
-  {score:99, parOn:0,  within1:9,  putts:39, fw:"OB3以内"},
-  {score:90, parOn:2,  within1:16, putts:34, fw:"OB1〜2"},
-  {score:84, parOn:3,  within1:18, putts:33, fw:"7/14"},
-  {score:78, parOn:6,  within1:18, putts:32, fw:"9/14"},
-  {score:72, parOn:12, within1:18, putts:30, fw:"11/14"},
-  {score:68, parOn:15, within1:18, putts:29, fw:"13/14"}
+  {score:99, parOn:0,  within1:9,  fw:"OB〜3", variants:[
+    {putts:39, one:0, three:3, note:"ダブルボギーとボギーが半々"},
+    {putts:39, one:1, three:4, note:"トリプルボギーが出たらパーが同じ数必要"},
+    {putts:39, one:2, three:5, note:"トリプルボギーが出たらパーが同じ数必要"}]},
+  {score:90, parOn:2,  within1:16, fw:"OB1〜2", variants:[
+    {putts:36, one:2, three:2, fw:"OB1", note:"1パットと3パットが同数"},
+    {putts:34, one:3, three:1, fw:"OB1", note:"パーとダブルボギーが同数"},
+    {putts:32, one:4, three:0, fw:"OB2"}]},
+  {score:84, parOn:3,  within1:18, fw:"7/14",  variants:[
+    {putts:33, one:4, three:1, note:"パーオンが1つもなくても1パット6回で達成"}]},
+  {score:78, parOn:6,  within1:18, fw:"9/14",  variants:[
+    {putts:32, one:4, three:0, note:"パーオンしていない12ホールのうち半分で1パット"}]},
+  {score:72, parOn:12, within1:18, fw:"11/14", variants:[
+    {putts:30, one:6, three:0, note:"42ショット30パット"}]},
+  {score:68, parOn:15, within1:18, fw:"13/14", variants:[
+    {putts:29, one:7, three:0, note:"パー5の2オン"}]}
 ];
-// 目標スコアに最も近い基準値と実績の差異行を生成（要望K3）
+// 目標スコアに対する基準値と実績の差異行を生成（要望K3・20260722）
+// ・目標が基準値スコアの間のときは隣接2行から線形補間（99超・68未満は端の行をそのまま使用）
+// ・同じ目標スコアに複数パターン行があるときは、実績（パット数・1パット・3パット数）に最も近い行を自動選択
+// ・基準値の全項目（スコア・パーオン・パーオン+1以内・パット数・OB/FW）を出力。OBが0回でも必ず出力。
 function benchmarkLines(r,st){
   const goal=(r.intent&&r.intent.goalScore)||0;
   if(!goal||!st.perHole.length)return [];
-  const bm=BENCHMARKS.reduce((a,b)=>Math.abs(b.score-goal)<Math.abs(a.score-goal)?b:a);
+  const onePutts=st.perHole.filter(h=>h.putts===1).length;
+  const pick=bm=>bm.variants.reduce((best,v)=>{
+    const dd=Math.abs(v.putts-st.totalPutts)+Math.abs((v.one||0)-onePutts)+Math.abs((v.three||0)-st.threePutts);
+    return (!best||dd<best.dd)?{v,dd}:best;
+  },null).v;
+  const S=BENCHMARKS.slice().sort((a,b)=>b.score-a.score);   // 99→68
+  const exact=S.find(b=>b.score===goal);
+  let bmA=S[0], bmB=S[0];                                     // 目標が99以上なら99の行
+  if(exact){ bmA=bmB=exact; }                                 // 基準値スコアと一致なら補間なし
+  else if(goal<=S[S.length-1].score){ bmA=bmB=S[S.length-1]; } // 68以下なら68の行
+  else if(goal<S[0].score){
+    for(let i=0;i<S.length-1;i++){ if(goal<=S[i].score&&goal>=S[i+1].score){bmA=S[i];bmB=S[i+1];break;} }
+  }
+  const vA=pick(bmA), vB=pick(bmB);
+  const t=(bmA.score===bmB.score)?0:(bmA.score-goal)/(bmA.score-bmB.score);
+  const lerp=(a,b)=>Math.round(a+(b-a)*t);
+  const bm={ score:lerp(bmA.score,bmB.score), parOn:lerp(bmA.parOn,bmB.parOn),
+    within1:lerp(bmA.within1,bmB.within1), putts:lerp(vA.putts,vB.putts) };
+  const near=(t<=0.5)?{bm:bmA,v:vA}:{bm:bmB,v:vB};            // テキスト項目は目標に近い側の行から
+  const fw=near.v.fw||near.bm.fw;
   const within1=st.parOn+st.bogeyOn;
   const d=(v)=>v>0?`+${v}`:`${v}`;
+  const src=(bmA.score===bmB.score)?`基準値スコア${bmA.score}`:`基準値スコア${bmA.score}と${bmB.score}から補間`;
   const lines=[];
-  lines.push(`目標${goal}（基準値スコア${bm.score}）との比較：`);
+  lines.push(`目標${goal}（${src}）との比較：`);
+  lines.push(`　スコア：${st.totalStrokes}（基準${bm.score}／差${d(st.totalStrokes-bm.score)}）`);
   lines.push(`　パーオン：${st.parOn}回（基準${bm.parOn}回／差${d(st.parOn-bm.parOn)}）`);
   lines.push(`　パーオン+1以内：${within1}回（基準${bm.within1}回／差${d(within1-bm.within1)}）`);
   lines.push(`　パット数：${st.totalPutts}（基準${bm.putts}以下／差${d(st.totalPutts-bm.putts)}）`);
+  lines.push(`　OB・FW：OB${st.ob}回（基準 ${fw}）`);
+  if(near.v.note)lines.push(`　参考パターン（基準${near.bm.score}）：${near.v.note}`);
   return lines;
+}
+/* ホール別の追加列（要望20260722）：
+   ±＝打数−Par（+1/+2/0/-1など）、オン記号＝グリーン到達打数（記録打数−パット）での判定
+   ◎バーディーオン(Par-3以内) ○パーオン(Par-2) △ボギーオン(Par-1) □ダボオン(Par) ×それ以上 */
+function holeParDiff(h){
+  if(h.status||!h.par||!h.recorded)return "";
+  const d=h.strokes-h.par;
+  return d>0?`+${d}`:String(d);
+}
+function holeOnMark(h){
+  if(h.status||!h.par||!h.recorded)return "";
+  const d=(h.recorded-h.putts)-(h.par-2);
+  return d<=-1?"◎":d===0?"○":d===1?"△":d===2?"□":"×";
 }
 
 /* ============ リフレクションシート ============ */
@@ -1831,15 +1905,16 @@ function renderSheet(r){
   const shNames=r.courseNames||((courses.find(c=>c.id===r.courseId)||{}).courseNames);
   const holeRow=h=>`<tr><td class="hno">${dispHoleFor(h.hole,shNames)}</td><td>${h.par||"-"}</td>
       <td>${h.status?`<span style="color:var(--warn);font-weight:700;">${h.status}(${h.strokes})</span>`:h.strokes}${h.penalty?`<span class="small">(内P${h.penalty})</span>`:""}</td>
-      <td>${h.putts}</td><td style="font-size:12px;">${esc(h.marks)}</td></tr>`;
+      <td>${holeParDiff(h)}</td>
+      <td>${h.putts}</td><td>${holeOnMark(h)}</td><td style="font-size:12px;">${esc(h.marks)}</td></tr>`;
   const subRow=(label,arr,strong)=>{
     if(!arr.length)return "";
     const s=arr.reduce((a,h)=>a+(h.status?0:h.strokes),0);
     const p=arr.reduce((a,h)=>a+(h.par&&!h.status?h.par:0),0);
     const pt=arr.reduce((a,h)=>a+h.putts,0);
-    const diff=p?` (${s-p>=0?"+":""}${s-p})`:"";
+    const diff=p?`${s-p>=0?"+":""}${s-p}`:"";
     return `<tr style="background:var(--primary2);font-weight:800;${strong?"border-top:2px solid var(--primary);":""}">
-      <td colspan="2" style="color:var(--primary);">${label}</td><td>${s}${diff}</td><td>${pt}</td><td></td></tr>`;
+      <td colspan="2" style="color:var(--primary);">${label}</td><td>${s}</td><td>${diff}</td><td>${pt}</td><td></td><td></td></tr>`;
   };
   const front=st.perHole.filter(h=>h.hole<=9), back=st.perHole.filter(h=>h.hole>=10);
   front.forEach(h=>holeRows+=holeRow(h));
@@ -1892,7 +1967,8 @@ function renderSheet(r){
       <span class="badge">パーオン ${st.parOn}回</span> <span class="badge">ボギーオン ${st.bogeyOn}回</span> <span class="badge">ダボオン ${st.dblOn}回</span></div>
     ${intentHtml}
     <h3>ホール別</h3>
-    <div class="wide"><table><tr><th>H</th><th>Par</th><th>打数</th><th>パット</th><th>結果</th></tr>${holeRows}</table></div>
+    <div class="wide"><table><tr><th>H</th><th>Par</th><th>スコア</th><th>±</th><th>パット</th><th>オン</th><th>結果</th></tr>${holeRows}</table></div>
+    <div class="small" style="margin-top:4px;">オン：◎バーディーオン　○パーオン　△ボギーオン　□ダボオン　×それ以上</div>
     <h3>ミス傾向</h3>
     <div>原因分類：${causes}</div>
     <div style="margin-top:4px;">方向：${dirs}</div>
@@ -1921,7 +1997,8 @@ function drawSheetCanvas(r){
   const refItems=reflectionItems(r);
   const refLines=refItems.reduce((a,[k,v])=>a+Math.ceil((k.length+v.length)/32)+1,0);
   const nClubs=Object.keys(st.clubStat).length;
-  const H=600+(rows+3)*lh+nClubs*lh+780+(nClubs?Math.max(340,nClubs*34+110):0)+(refItems.length?100+refLines*36:0);
+  const nUse=clubUseEntries(st).length;   // 使用回数の凡例は0回クラブも含む（要望20260722 G2）
+  const H=600+(rows+3)*lh+nClubs*lh+920+(nUse?Math.max(340,nUse*34+110):0)+(refItems.length?100+refLines*36:0);   // +140：基準値比較がスコア・OB・参考パターン行を含む最大7行になったぶん（要望20260722）
   const cv=document.createElement("canvas"); cv.width=W; cv.height=H;
   const g=cv.getContext("2d");
   g.fillStyle="#fff"; g.fillRect(0,0,W,H);
@@ -1942,9 +2019,9 @@ function drawSheetCanvas(r){
   g.fillText(`パーオン ${st.parOn}回　ボギーオン ${st.bogeyOn}回　ダボオン ${st.dblOn}回`,pad,y); y+=50;
   // ホール別表
   g.font="bold 28px sans-serif"; g.fillStyle="#1f7a4d"; g.fillText("ホール別",pad,y); y+=14;
-  const cols=[pad,pad+110,pad+260,pad+460,pad+640];
+  const cols=[pad,pad+95,pad+190,pad+330,pad+440,pad+570,pad+680];
   g.font="bold 24px sans-serif"; g.fillStyle="#344054"; y+=34;
-  ["H","Par","打数","パット","結果"].forEach((t,i)=>g.fillText(t,cols[i],y));
+  ["H","Par","スコア","±","パット","オン","結果"].forEach((t,i)=>g.fillText(t,cols[i],y));
   y+=8;
   g.strokeStyle="#d0d5dd"; g.beginPath(); g.moveTo(pad,y); g.lineTo(W-pad,y); g.stroke();
   g.font="26px sans-serif";
@@ -1956,8 +2033,10 @@ function drawSheetCanvas(r){
     if(h.status){g.fillStyle="#b54708";g.fillText(`${h.status}(${h.strokes})`,cols[2],y);}
     else g.fillText(String(h.strokes),cols[2],y);
     g.fillStyle="#16202a";
-    g.fillText(String(h.putts),cols[3],y);
-    g.fillText(h.marks,cols[4],y);
+    g.fillText(holeParDiff(h),cols[3],y);
+    g.fillText(String(h.putts),cols[4],y);
+    g.fillText(holeOnMark(h),cols[5],y);
+    g.fillText(h.marks,cols[6],y);
   };
   const cvSubRow=(label,arr)=>{
     if(!arr.length)return;
@@ -1967,8 +2046,9 @@ function drawSheetCanvas(r){
     y+=lh;
     g.font="bold 26px sans-serif"; g.fillStyle="#1f7a4d";
     g.fillText(label,cols[0],y);
-    g.fillText(`${s}${p?` (${s-p>=0?"+":""}${s-p})`:""}`,cols[2],y);
-    g.fillText(String(pt),cols[3],y);
+    g.fillText(String(s),cols[2],y);
+    if(p)g.fillText(`${s-p>=0?"+":""}${s-p}`,cols[3],y);
+    g.fillText(String(pt),cols[4],y);
     g.font="26px sans-serif";
   };
   const cvFront=st.perHole.filter(h=>h.hole<=9), cvBack=st.perHole.filter(h=>h.hole>=10);
@@ -2108,7 +2188,7 @@ function renderHistory(){
     const idx=history.length-1-revIdx;
     return `<div class="course-item">
       <div class="name">${esc(r.date)}　${esc(r.courseName)}</div>
-      <div class="sub">${esc(r.startCourse)} / ${esc(r.tee)} / ${esc(r.weather)} / ${esc(r.condition)}　${r.shots.length}ショット</div>
+      <div class="sub">${esc(r.startCourse)} / ${esc(r.tee)} / ${esc(r.weather)} / ${esc(r.condition)}　スコア${roundStats(r).totalStrokes}</div>
       <div class="grid3" style="margin-top:8px;">
         <button class="action-btn light small" onclick="openReflection(history[${idx}])">シート表示</button>
         <button class="action-btn secondary small" onclick="exportCSV(history[${idx}])">CSV</button>
