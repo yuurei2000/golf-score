@@ -342,8 +342,13 @@ td.hno{font-weight:800;background:#f9fafb;}
     </div>
     <label class="required" style="margin-top:0;">クラブ</label>
     <div class="btn-grid" id="clubBtns"></div>
-    <label class="required">結果</label>
+    <label class="required" id="resultLabel">結果</label>
     <div class="btn-grid" id="resultBtns"></div>
+    <!-- Par4・5の1打目のみ表示：フェアウェイキープ記録（要望20260726 I2） -->
+    <div id="fwBox" style="display:none;margin-top:6px;">
+      <label>1打目フェアウェイ（Par4・5）</label>
+      <div class="btn-grid one-line" id="fwBtns"></div>
+    </div>
     <div id="missBox">
       <label style="color:var(--warn);">ミス内容</label>
       <label>トラブル</label>
@@ -380,6 +385,13 @@ td.hno{font-weight:800;background:#f9fafb;}
     <label style="margin-top:0;">パット数を選択</label>
     <div class="btn-grid" id="pqCountBtns"></div>
     <div class="btn-grid" id="pqResults" style="margin-top:6px;"></div>
+    <!-- 1打ごとの結果の下に詳細入力（1stパット）を折りたたみで表示（要望20260726 D2） -->
+    <div id="pqDetailToggle" class="small" style="display:none;color:var(--accent);font-weight:700;cursor:pointer;margin-top:6px;" onclick="togglePqDetail()">▶ 詳細を入力（1stパット）</div>
+    <div id="pqDetailBox" style="display:none;">
+      <label>残り距離</label><div class="btn-grid" id="pqDistBtns"></div>
+      <label>ライン</label><div class="btn-grid" id="pqLineBtns"></div>
+      <label>外れ方・タッチ</label><div class="btn-grid" id="pqTouchBtns"></div>
+    </div>
     <button class="action-btn" id="pqRegBtn" onclick="registerQuickPutts()" disabled>パットを記録</button>
     <div class="small" style="margin-top:4px;">パット数を選ぶと1打ごとの結果（○△×）が表示されます。タップで○→△→×と切替できます（初期値は全て○）。距離・ラインなどの詳細は記録一覧から編集できます。</div>
     <div class="small" id="pqHint" style="min-height:1.2em;font-weight:700;color:var(--primary);"></div>
@@ -559,6 +571,7 @@ let setupSel = { tee:null, startCourse:null, weather:null, condition:null, cours
 let shot = null;
 let pqCount = null;   // パットまとめ入力で選択中のパット数
 let pqResults = [];   // 各パットの結果（○△×）。パット数選択時に生成
+let pqDetail = {dist:null,line:[],touch:[]};   // 1stパットの詳細（要望20260726 D2）
 let editState = null;      // null=通常記録 / {idx} 編集中のround.shots添字
 let sheetRound = null;     // リフレクション表示中のラウンド
 let ocrFiles = { all:null, front:null, back:null };
@@ -877,22 +890,25 @@ function renderParTemplates(){
   });
 }
 function renderHoleTable(){
-  const tee=editingCourse.tees[editingTeeIdx];
-  const et=document.getElementById("editTeeName"); if(et)et.textContent=tee;
   // 入力中のコース名を見出しに即時反映（未入力時は保存済み値→OUT/IN）
   const cn=[
     document.getElementById("ceCourseFirst")?.value.trim()||((editingCourse.courseNames||[])[0])||"OUT",
     document.getElementById("ceCourseSecond")?.value.trim()||((editingCourse.courseNames||[])[1])||"IN"
   ];
-  let html=`<tr><th>H</th><th>Par</th><th>距離(${esc(tee)})</th><th>HDCP</th></tr>`;
-  editingCourse.holes.forEach((h,i)=>{
-    if(i===0)html+=`<tr><th colspan="4" style="background:var(--primary2);color:var(--primary);">前半（${esc(cn[0]||"OUT")}）</th></tr>`;
-    if(i===9)html+=`<tr><th colspan="4" style="background:var(--primary2);color:var(--primary);border-top:3px solid var(--primary);">後半（${esc(cn[1]||"IN")}）</th></tr>`;
-    html+=`<tr><td class="hno">${dispHoleFor(h.no,cn)}</td>
-      <td><div class="par-seg">${[3,4,5].map(p=>`<button type="button" class="par-btn${h.par===p?" sel":""}" onclick="setPar(${i},${p},this)">${p}</button>`).join("")}</div></td>
-      <td><input type="number" inputmode="numeric" value="${h.dist[tee]??""}" placeholder="-" onchange="setHoleDist(${i},this.value)"></td>
-      <td><input type="number" inputmode="numeric" value="${h.hdcp}" placeholder="-" onchange="editingCourse.holes[${i}].hdcp=this.value"></td></tr>`;
-  });
+  // 距離・HDCPは表示しない／前半・後半を並べて表示／Par合計行を出す（要望20260726 H2/H3/H4）
+  const seg=i=>`<div class="par-seg">${[3,4,5].map(p=>`<button type="button" class="par-btn${editingCourse.holes[i].par===p?" sel":""}" onclick="setPar(${i},${p},this)">${p}</button>`).join("")}</div>`;
+  let html=`<tr><th colspan="2" style="background:var(--primary2);color:var(--primary);">前半（${esc(cn[0]||"OUT")}）</th>
+    <th colspan="2" style="background:var(--primary2);color:var(--primary);border-left:3px solid var(--primary);">後半（${esc(cn[1]||"IN")}）</th></tr>
+    <tr><th>H</th><th>Par</th><th style="border-left:3px solid var(--primary);">H</th><th>Par</th></tr>`;
+  for(let i=0;i<9;i++){
+    html+=`<tr><td class="hno">${dispHoleFor(i+1,cn)}</td><td>${seg(i)}</td>
+      <td class="hno" style="border-left:3px solid var(--primary);">${dispHoleFor(i+10,cn)}</td><td>${seg(i+9)}</td></tr>`;
+  }
+  const parSum=(a,b)=>editingCourse.holes.slice(a,b).reduce((x,h)=>x+(h.par||0),0);
+  const pf=parSum(0,9),pb=parSum(9,18);
+  html+=`<tr style="background:var(--primary2);font-weight:800;"><td colspan="2" style="color:var(--primary);">前半計 Par${pf}</td>
+    <td colspan="2" style="color:var(--primary);border-left:3px solid var(--primary);">後半計 Par${pb}</td></tr>`;
+  html+=`<tr style="background:var(--primary2);font-weight:800;border-top:2px solid var(--primary);"><td colspan="4" style="color:var(--primary);">合計 Par${pf+pb}</td></tr>`;
   document.getElementById("holeTable").innerHTML=html;
   updateCeSummary();
 }
@@ -906,9 +922,7 @@ function updateCeSummary(){
 }
 function setPar(i,p,btn){
   editingCourse.holes[i].par=p;
-  const cell=btn.parentElement;
-  cell.querySelectorAll(".par-btn").forEach(b=>b.classList.toggle("sel",parseInt(b.textContent)===p));
-  updateCeSummary();
+  renderHoleTable();   // Par合計行も更新（要望20260726 H2）
 }
 function setHoleDist(i,v){
   const tee=editingCourse.tees[editingTeeIdx];
@@ -1172,7 +1186,7 @@ function initRecordScreen(){
   resetShotInput(); buildRecordButtons(); updateHoleBar(); renderHolePicker(true); renderShotList(); updateFooterMode(); updateRegisterState();
 }
 function resetShotInput(){
-  shot={ club:null, lie:null, result:null,
+  shot={ club:null, lie:null, result:null, fw:false,
     missDir:[], missHit:[], missSpecial:[], missCause:null,
     distBand:null, slope:["平坦"], ball:"普通", aim:null,
     puttDist:null, puttLine:[], puttTouch:[], memo:"" };
@@ -1191,6 +1205,12 @@ function buildRecordButtons(){
   });
   buildBtns("lieBtns",LIES,(v,b,el)=>{shot.lie=v;selectSingle(el,v);togglePuttBox();updateRegisterState();});
   buildBtns("resultBtns",RESULTS.map(r=>r.key),(v,b,el)=>{shot.result=v;selectSingle(el,v);toggleMissBox();updateRegisterState();},{big:true});
+  // FWキープ（Par4・5の1打目のみ表示・タップでON/OFF）（要望20260726 I2）
+  buildBtns("fwBtns",["FWキープ"],(v,b)=>{shot.fw=!shot.fw;b.classList.toggle("selected",shot.fw);});
+  // パットまとめ入力の1stパット詳細（要望20260726 D2）
+  buildBtns("pqDistBtns",PUTT_DIST,(v,b,el)=>{pqDetail.dist=(pqDetail.dist===v)?null:v;selectSingle(el,pqDetail.dist);});
+  buildBtns("pqLineBtns",PUTT_LINE,(v,b,el)=>{pqDetail.line=toggleAxisSel(pqDetail.line,v,PUTT_LINE_AXES,el);});
+  buildBtns("pqTouchBtns",PUTT_TOUCH,(v,b,el)=>{pqDetail.touch=toggleAxisSel(pqDetail.touch,v,PUTT_TOUCH_AXES,el);});
   buildBtns("missDirBtns",MISS_DIR,(v,b,el)=>{shot.missDir=toggleAxisSel(shot.missDir,v,MISS_DIR_AXES,el);});
   buildBtns("missHitBtns",MISS_HIT,(v,b)=>toggleMulti(shot.missHit,v,b));
   buildBtns("missSpecialBtns",MISS_SPECIAL,(v,b)=>toggleMulti(shot.missSpecial,v,b));
@@ -1218,6 +1238,22 @@ function renderPqResults(){
     const cls=r==="○"?"r-ok":r==="△"?"r-tri":"r-ng";
     return `<button type="button" class="opt-btn" style="min-width:92px;" onclick="cyclePqResult(${i})">${i+1}打目 <span class="${cls}">${r}</span></button>`;
   }).join("");
+  // 結果チップの下に「▶詳細を入力」を表示（要望20260726 D2）
+  const tg=document.getElementById("pqDetailToggle");
+  if(tg)tg.style.display=pqResults.length?"block":"none";
+}
+function togglePqDetail(){
+  const box=document.getElementById("pqDetailBox"),tg=document.getElementById("pqDetailToggle");
+  if(!box||!tg)return;
+  const show=box.style.display==="none";
+  box.style.display=show?"block":"none";
+  tg.textContent=(show?"▼":"▶")+" 詳細を入力（1stパット）";
+}
+function resetPqDetail(){
+  pqDetail={dist:null,line:[],touch:[]};
+  ["pqDistBtns","pqLineBtns","pqTouchBtns"].forEach(clearSel);
+  const box=document.getElementById("pqDetailBox"); if(box)box.style.display="none";
+  const tg=document.getElementById("pqDetailToggle"); if(tg){tg.style.display="none";tg.textContent="▶ 詳細を入力（1stパット）";}
 }
 function cyclePqResult(i){
   const next={"○":"△","△":"×","×":"○"};
@@ -1254,11 +1290,13 @@ function registerQuickPutts(){
       club:"PT",lie:"グリーン",result,resultScore:rObj.score,
       missDir:[],missHit:[],missSpecial:[],missCause:"",
       distBand:"",slope:["平坦"],ball:"普通",aim:"",
-      puttDist:"",puttLine:[],puttTouch:[],
+      puttDist:i===1?(pqDetail.dist||""):"",              // 詳細入力は1stパットに記録（要望20260726 D2）
+      puttLine:i===1?pqDetail.line.slice():[],
+      puttTouch:i===1?pqDetail.touch.slice():[],
       memo:""});
   }
   saveJSON(LS_CURRENT,round);
-  pqCount=null; pqResults=[];
+  pqCount=null; pqResults=[]; resetPqDetail();
   clearSel("pqCountBtns");
   const pr=document.getElementById("pqResults"); if(pr)pr.innerHTML="";
   document.getElementById("pqRegBtn").disabled=true;
@@ -1282,12 +1320,23 @@ function toggleMulti(arr,v,btn){
 }
 function toggleMissBox(){document.getElementById("missBox").style.display=(shot.result==="△"||shot.result==="×")?"block":"none";}
 function togglePuttBox(){document.getElementById("puttBox").style.display=(shot.lie==="グリーン")?"block":"none";}
-// クラブPT選択時：詳細を入力の項目は表示せず、パット詳細だけを直接表示（要望20260722 K2/K3）
+// クラブPT選択時（通常記録）：結果・ミス内容・詳細を隠し、パット数選択カード（＋詳細を入力）に集約する（要望20260726）
+// 編集モードでPTの打を開いたときは、結果＋パット詳細だけを表示（要望20260722 K2/K3）
 function togglePtDetail(){
   const d=document.getElementById("detailBox"); if(!d)return;
   const pt=!!(shot&&shot.club==="PT");
-  d.classList.toggle("pt-mode",pt);
-  if(pt)d.setAttribute("open","");
+  const hideShot=pt&&!editState;
+  const rl=document.getElementById("resultLabel"); if(rl)rl.style.display=hideShot?"none":"";
+  const rb=document.getElementById("resultBtns"); if(rb)rb.style.display=hideShot?"none":"";
+  d.style.display=hideShot?"none":"";
+  if(hideShot){
+    document.getElementById("missBox").style.display="none";
+    document.getElementById("fwBox").style.display="none";
+  }else{
+    toggleMissBox(); updateFwBox();
+  }
+  d.classList.toggle("pt-mode",pt&&!!editState);
+  if(pt&&editState)d.setAttribute("open","");
 }
 function flashHoleBar(){}   // ホールバー廃止に伴い無効化
 function updateStrokeLabel(){
@@ -1419,13 +1468,24 @@ function jumpToHole(n){
 }
 function prevHole(){ const o=holeOrderArr(); const i=o.indexOf(round.curHole); if(i>0)jumpToHole(o[i-1]); }
 function updateRegisterState(){
+  const ptQuick=shot&&shot.club==="PT"&&!editState;   // PT通常記録はパット数選択カードで記録（要望20260726）
   const missing=[];
   if(!shot.club)missing.push("クラブ");
-  if(!shot.result)missing.push("結果");
-  const dis=missing.length>0;
+  if(!ptQuick&&!shot.result)missing.push("結果");
+  const dis=missing.length>0||ptQuick;
   document.getElementById("registerBtn").disabled=dis;
   const hb=document.getElementById("hbRegBtn"); if(hb)hb.disabled=dis;
-  document.getElementById("footerHint").textContent=missing.length?`未選択：${missing.join("・")}`:"";
+  document.getElementById("footerHint").textContent=ptQuick?"パットは「パットを記録」ボタンで記録します":(missing.length?`未選択：${missing.join("・")}`:"");
+  updateFwBox();
+}
+// FWキープ欄はPar4・5の1打目（編集時はその打）だけ表示（要望20260726 I2）
+function updateFwBox(){
+  const box=document.getElementById("fwBox"); if(!box)return;
+  if(!round||(shot&&shot.club==="PT"&&!editState)){box.style.display="none";return;}   // PT通常記録中は非表示（要望20260726）
+  const stroke=editState?round.shots[editState.idx].stroke:round.curStroke;
+  const par=editState?round.shots[editState.idx].par:((round.holes[round.curHole-1]||{}).par);
+  box.style.display=(stroke===1&&(par===4||par===5))?"block":"none";
+  const b=box.querySelector(".opt-btn"); if(b)b.classList.toggle("selected",!!(shot&&shot.fw));
 }
 function updateFooterMode(){
   const editing=!!editState;
@@ -1439,7 +1499,7 @@ function shotFromInput(holeNo,strokeNo){
   const h=round.holes[holeNo-1];
   return {
     hole:holeNo, par:h.par, baseDist:h.dist[round.tee]??"", stroke:strokeNo,
-    club:shot.club, lie:shot.lie||"", result:shot.result,
+    club:shot.club, lie:shot.lie||"", result:shot.result, fw:!!shot.fw,
     resultScore:RESULTS.find(r=>r.key===shot.result).score,
     missDir:shot.missDir.slice(), missHit:shot.missHit.slice(),
     missSpecial:shot.missSpecial.filter(s=>s!=="なし"), missCause:shot.missCause||"",
@@ -1452,7 +1512,7 @@ function shotFromInput(holeNo,strokeNo){
 }
 function loadShotToInput(rec){
   resetShotInput();
-  shot.club=rec.club; shot.lie=rec.lie; shot.result=rec.result;
+  shot.club=rec.club; shot.lie=rec.lie; shot.result=rec.result; shot.fw=!!rec.fw;
   shot.missDir=toArr(rec.missDir); shot.missHit=toArr(rec.missHit); shot.missSpecial=toArr(rec.missSpecial);
   shot.missCause=rec.missCause||null;
   shot.distBand=rec.distBand||null; shot.slope=toArr(rec.slope).length?toArr(rec.slope):["平坦"];
@@ -1481,7 +1541,7 @@ function loadShotToInput(rec){
 }
 function clearInputUI(){
   resetShotInput();
-  ["clubBtns","lieBtns","resultBtns","missDirBtns","missHitBtns","missSpecialBtns","missCauseBtns",
+  ["clubBtns","lieBtns","resultBtns","fwBtns","missDirBtns","missHitBtns","missSpecialBtns","missCauseBtns",
    "puttDistBtns","puttLineBtns","puttTouchBtns","distBtns","slopeBtns","ballBtns","aimBtns"].forEach(clearSel);
   document.getElementById("shotMemo").value="";
   document.getElementById("missBox").style.display="none";
@@ -1489,10 +1549,11 @@ function clearInputUI(){
   document.getElementById("detailBox").removeAttribute("open");
   document.getElementById("detailBox").classList.remove("pt-mode");
   // パットまとめ入力の選択もリセットし、カードを隠す（PT選択で再表示）
-  pqCount=null; pqResults=[];
+  pqCount=null; pqResults=[]; resetPqDetail();
   clearSel("pqCountBtns");
   const pr=document.getElementById("pqResults"); if(pr)pr.innerHTML="";
   const pqBtn=document.getElementById("pqRegBtn"); if(pqBtn)pqBtn.disabled=true;
+  togglePtDetail();   // 結果・詳細の表示状態をリセット（PT解除）
   togglePuttQuick();
 }
 function renumberHole(holeNo){
@@ -1745,6 +1806,13 @@ function roundStats(r){
   const okRate=r.shots.length?Math.round(r.shots.filter(s=>s.result==="○").length/r.shots.length*100):0;
   const ob=r.shots.filter(s=>toArr(s.missSpecial).includes("OB")).length;
   const pond=r.shots.filter(s=>toArr(s.missSpecial).some(v=>v.includes("池"))).length;
+  // FWキープ：Par4・5ホールの1打目がフェアウェイだった数（要望20260726 I2）
+  let fwKeep=0,fwTotal=0;
+  for(let hn=1;hn<=18;hn++){
+    const first=r.shots.find(s=>s.hole===hn&&s.stroke===1);
+    if(!first)continue;
+    if(first.par===4||first.par===5){fwTotal++;if(first.fw)fwKeep++;}
+  }
   // パーオン／ボギーオン／ダボオン（グリーン到達打数＝記録打数−パット数で判定・要望K2）
   let parOn=0,bogeyOn=0,dblOn=0;
   perHole.forEach(h=>{
@@ -1757,7 +1825,7 @@ function roundStats(r){
   });
   return {perHole,totalStrokes,totalPar,totalPutts,totalPenalty,threePutts,parOn,bogeyOn,dblOn,
     dirCnt:cnt("missDir"),hitCnt:cnt("missHit"),
-    puttLineCnt:cnt("puttLine"),puttTouchCnt:cnt("puttTouch"),causeCnt,clubStat,okRate,ob,pond};
+    puttLineCnt:cnt("puttLine"),puttTouchCnt:cnt("puttTouch"),causeCnt,clubStat,okRate,ob,pond,fwKeep,fwTotal};
 }
 function topEntries(m,n=3){ return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,n); }
 /* ---- クラブ別使用回数 円グラフ（要望I2） ---- */
@@ -1794,22 +1862,23 @@ function clubUseEntries(st){
 // スコア別ゴルフ基準値一覧（要望K3の表より）：目標スコアごとの基準値
 // variants＝同じ目標スコアに到達する別パターンの行（パット内訳・備考が異なる）。
 // 比較時は実績（パット数・1パット・3パット数）に最も近い行を自動選択する（要望20260722）。
+// ob＝OB数の基準（99/90のみ）、fwKeep＝FWキープ数の基準（84以下のみ）。FWとOBは別項目として比較する（要望20260726 I2）
 const BENCHMARKS=[
-  {score:99, parOn:0,  within1:9,  fw:"OB〜3", variants:[
+  {score:99, parOn:0,  within1:9,  ob:"〜3", fwKeep:"", variants:[
     {putts:39, one:0, three:3, note:"ダブルボギーとボギーが半々"},
     {putts:39, one:1, three:4, note:"トリプルボギーが出たらパーが同じ数必要"},
     {putts:39, one:2, three:5, note:"トリプルボギーが出たらパーが同じ数必要"}]},
-  {score:90, parOn:2,  within1:16, fw:"OB1〜2", variants:[
-    {putts:36, one:2, three:2, fw:"OB1", note:"1パットと3パットが同数"},
-    {putts:34, one:3, three:1, fw:"OB1", note:"パーとダブルボギーが同数"},
-    {putts:32, one:4, three:0, fw:"OB2"}]},
-  {score:84, parOn:3,  within1:18, fw:"7/14",  variants:[
+  {score:90, parOn:2,  within1:16, ob:"1〜2", fwKeep:"", variants:[
+    {putts:36, one:2, three:2, ob:"1", note:"1パットと3パットが同数"},
+    {putts:34, one:3, three:1, ob:"1", note:"パーとダブルボギーが同数"},
+    {putts:32, one:4, three:0, ob:"2"}]},
+  {score:84, parOn:3,  within1:18, ob:"", fwKeep:"7/14",  variants:[
     {putts:33, one:4, three:1, note:"パーオンが1つもなくても1パット6回で達成"}]},
-  {score:78, parOn:6,  within1:18, fw:"9/14",  variants:[
+  {score:78, parOn:6,  within1:18, ob:"", fwKeep:"9/14",  variants:[
     {putts:32, one:4, three:0, note:"パーオンしていない12ホールのうち半分で1パット"}]},
-  {score:72, parOn:12, within1:18, fw:"11/14", variants:[
+  {score:72, parOn:12, within1:18, ob:"", fwKeep:"11/14", variants:[
     {putts:30, one:6, three:0, note:"42ショット30パット"}]},
-  {score:68, parOn:15, within1:18, fw:"13/14", variants:[
+  {score:68, parOn:15, within1:18, ob:"", fwKeep:"13/14", variants:[
     {putts:29, one:7, three:0, note:"パー5の2オン"}]}
 ];
 // 目標スコアに対する基準値と実績の差異行を生成（要望K3・20260722）
@@ -1838,17 +1907,35 @@ function benchmarkLines(r,st){
   const bm={ score:lerp(bmA.score,bmB.score), parOn:lerp(bmA.parOn,bmB.parOn),
     within1:lerp(bmA.within1,bmB.within1), putts:lerp(vA.putts,vB.putts) };
   const near=(t<=0.5)?{bm:bmA,v:vA}:{bm:bmB,v:vB};            // テキスト項目は目標に近い側の行から
-  const fw=near.v.fw||near.bm.fw;
+  const obBasis=near.v.ob||near.bm.ob;
+  const fwBasis=near.bm.fwKeep;
   const within1=st.parOn+st.bogeyOn;
   const d=(v)=>v>0?`+${v}`:`${v}`;
+  // 各項目に達成度○△×を付ける（要望20260727）：○＝基準達成、△＝惜しい（スコア+3/回数-1〜2/パット+2/OB+1以内）、×＝未達
+  const mk=(ok,near2)=>ok?"○":near2?"△":"×";
+  const mScore=mk(st.totalStrokes<=bm.score, st.totalStrokes<=bm.score+3);
+  const mParOn=mk(st.parOn>=bm.parOn, st.parOn>=bm.parOn-1);
+  const mW1=mk(within1>=bm.within1, within1>=bm.within1-2);
+  const mPutts=mk(st.totalPutts<=bm.putts, st.totalPutts<=bm.putts+2);
+  let mFw="";
+  if(fwBasis&&st.fwTotal){
+    const fm=fwBasis.match(/(\d+)\/(\d+)/);
+    if(fm){const br=fm[1]/fm[2], ar=st.fwKeep/st.fwTotal; mFw=mk(ar>=br, ar>=br-2/14);}
+  }
+  let mOb="";
+  if(obBasis){
+    const nums=obBasis.match(/\d+/g);
+    if(nums){const mx=parseInt(nums[nums.length-1]); mOb=mk(st.ob<=mx, st.ob<=mx+1);}
+  }
   const src=(bmA.score===bmB.score)?`基準値スコア${bmA.score}`:`基準値スコア${bmA.score}と${bmB.score}から補間`;
   const lines=[];
   lines.push(`目標${goal}（${src}）との比較：`);
-  lines.push(`　スコア：${st.totalStrokes}（基準${bm.score}／差${d(st.totalStrokes-bm.score)}）`);
-  lines.push(`　パーオン：${st.parOn}回（基準${bm.parOn}回／差${d(st.parOn-bm.parOn)}）`);
-  lines.push(`　パーオン+1以内：${within1}回（基準${bm.within1}回／差${d(within1-bm.within1)}）`);
-  lines.push(`　パット数：${st.totalPutts}（基準${bm.putts}以下／差${d(st.totalPutts-bm.putts)}）`);
-  lines.push(`　OB・FW：OB${st.ob}回（基準 ${fw}）`);
+  lines.push(`　${mScore} スコア：${st.totalStrokes}（基準${bm.score}／差${d(st.totalStrokes-bm.score)}）`);
+  lines.push(`　${mParOn} パーオン：${st.parOn}回（基準${bm.parOn}回／差${d(st.parOn-bm.parOn)}）`);
+  lines.push(`　${mW1} パーオン+1以内：${within1}回（基準${bm.within1}回／差${d(within1-bm.within1)}）`);
+  lines.push(`　${mPutts} パット数：${st.totalPutts}（基準${bm.putts}以下／差${d(st.totalPutts-bm.putts)}）`);
+  lines.push(`　${mFw||"−"} FWキープ：${st.fwKeep}/${st.fwTotal}（基準 ${fwBasis||"−"}）`);   // FW＝Par4・5の1打目フェアウェイ数
+  lines.push(`　${mOb||"−"} OB：${st.ob}回（基準 ${obBasis?`OB${obBasis}`:"−"}）`);
   if(near.v.note)lines.push(`　参考パターン（基準${near.bm.score}）：${near.v.note}`);
   return lines;
 }
@@ -1928,7 +2015,9 @@ function renderSheet(r){
   const puttTend=[...topEntries(st.puttLineCnt),...topEntries(st.puttTouchCnt)].map(([k,v])=>`<span class="pill">${esc(k)} ${v}回</span>`).join(" ")||"<span class='small'>記録なし</span>";
   const clubs=Object.entries(st.clubStat).map(([c,s])=>({c,n:s.n,rate:Math.round(s.sum/s.n*100)})).sort((a,b)=>a.rate-b.rate);
   const weakClubs=clubs.filter(c=>c.n>=2).slice(0,3);
-  let clubRows=clubs.map(c=>`<tr><td>${esc(c.c)}</td><td>${c.n}</td><td>${c.rate}%</td></tr>`).join("");
+  // 成功率表は基本情報のクラブ順（DR→…→PT）で表示（要望20260726 F2）
+  const scOm=clubOrderMap();
+  let clubRows=clubs.slice().sort((a,b)=>(scOm[a.c]||99)-(scOm[b.c]||99)).map(c=>`<tr><td>${esc(c.c)}</td><td>${c.n}</td><td>${c.rate}%</td></tr>`).join("");
   const topCause=topEntries(st.causeCnt,1)[0];
   const advice=[];
   if(topCause)advice.push(`最多のミス原因は「${topCause[0]}」（${topCause[1]}回）。`+
@@ -2070,7 +2159,8 @@ function drawSheetCanvas(r){
   // クラブ別
   g.font="bold 28px sans-serif"; g.fillStyle="#1f7a4d"; g.fillText("クラブ別成功率",pad,y); y+=40;
   g.font="26px sans-serif";
-  Object.entries(st.clubStat).sort((a,b)=>(a[1].sum/a[1].n)-(b[1].sum/b[1].n)).forEach(([c,s])=>{
+  const cvOm=clubOrderMap();   // 基本情報のクラブ順（要望20260726 F2）
+  Object.entries(st.clubStat).sort((a,b)=>(cvOm[a[0]]||99)-(cvOm[b[0]]||99)).forEach(([c,s])=>{
     g.fillStyle="#16202a";
     g.fillText(`${c}：${Math.round(s.sum/s.n*100)}%（${s.n}打）`,pad,y); y+=lh;
   });
@@ -2158,7 +2248,7 @@ function exportCSV(r){
   const header=["日付","ゴルフ場","コース","使用ティー","天候","体調",
     "ホール","Par","基準距離","打数","ホール状態","ホール最終打数","ペナルティ",
     "クラブ","残り距離","ライ","傾斜","ボール状態","狙い",
-    "結果","結果数値","ミス方向","ミス当たり","特殊結果","原因分類",
+    "結果","結果数値","FWキープ","ミス方向","ミス当たり","特殊結果","原因分類",
     "パット距離帯","パットライン","パット外れ方","メモ"];
   const rows=r.shots.map(s=>{
     const sc=(r.holeScore&&r.holeScore[s.hole])||{};
@@ -2169,7 +2259,7 @@ function exportCSV(r){
     r.date,r.courseName,r.startCourse,r.tee,r.weather,r.condition,
     s.hole,s.par,s.baseDist,s.stroke,(r.holeStatus&&r.holeStatus[s.hole])||"",finalH,penH,
     s.club,s.distBand,s.lie,joinArr(s.slope),s.ball,s.aim,
-    s.result,s.resultScore,joinArr(s.missDir),joinArr(s.missHit),joinArr(s.missSpecial),s.missCause,
+    s.result,s.resultScore,s.fw?"FW":"",joinArr(s.missDir),joinArr(s.missHit),joinArr(s.missSpecial),s.missCause,
     s.puttDist,joinArr(s.puttLine),joinArr(s.puttTouch),s.memo];});
   const csvEsc=v=>{v=String(v??"");return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
   const csv=[header,...rows].map(row=>row.map(csvEsc).join(",")).join("\r\n");
