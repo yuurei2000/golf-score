@@ -246,7 +246,8 @@ td.hno{font-weight:800;background:#f9fafb;}
   </div>
   <div class="card">
     <button class="action-btn" onclick="saveMyClubs()">この内容で保存</button>
-    <button class="action-btn secondary small" onclick="renderCourseMaster();showScreen('scrCourseMaster')">ゴルフ場情報へ戻る</button>
+    <!-- 最初のタブなので「戻る」ではなく次のタブへ進む導線にする（フィードバック20260728） -->
+    <button class="action-btn secondary small" onclick="goTab('intent')">次へ：目標を入力</button>
   </div>
 </div>
 
@@ -610,6 +611,7 @@ function goCourseSub(key){
 }
 // タブバー描画
 function renderTabs(activeKey){
+  window._curTabKey=activeKey||null;   // スワイプ移動用に現在タブを保持
   const bar=document.getElementById("tabBar"), row=document.getElementById("tabRow");
   if(!activeKey){ bar.classList.remove("show"); return; }
   bar.classList.add("show");
@@ -631,6 +633,7 @@ function goTab(key){
     case "start":
       if(setupSel.courseId){ showScreen("scrRoundSetup"); }
       else if(round){ alert("ラウンド進行中です。「ホール入力」タブへ。"); }
+      else if(sheetRound){ alert("ラウンドは終了しました。結果は「最終結果」タブで確認できます。\n新しいラウンドは「ゴルフ場情報」からゴルフ場を選んで開始してください。"); renderCourseMaster(); showScreen("scrCourseMaster"); }
       else { alert("先に「ゴルフ場登録」でコースを選択してください。"); renderCourseMaster(); showScreen("scrCourseMaster"); }
       break;
     case "hole":
@@ -796,7 +799,7 @@ function renderResume(){
   if(round && round.shots){
     area.innerHTML=`<div class="card" style="padding:12px;"><div class="course-item" style="margin:0;" onclick="resumeRound()">
       <div class="name">▶ ラウンド再開：${esc(round.courseName)}</div>
-      <div class="sub">${esc(round.date)}　記録済み ${round.shots.length}ショット　現在 ${round.curHole}H</div></div></div>`;
+      <div class="sub">${esc(round.date)}　記録済み ${round.shots.length}ショット　現在 ${dispHole(round.curHole)}H</div></div></div>`;
   } else area.innerHTML="";
 }
 // ゴルフ場マスタ＝ゴルフ場情報の初期表示（要望20260718-3 G2/D2/D3/D4）
@@ -1447,7 +1450,17 @@ function renderHolePicker(scroll){
     const cnt=round.shots.filter(s=>s.hole===n).length;
     const done=(round.holeStatus&&round.holeStatus[n]);
     b.className="hs-btn"+(n===round.curHole?" cur":"")+((cnt||done)?" has":"");
-    b.innerHTML=`${dispHole(n)}H${cnt?`<span class="n">(${cnt})</span>`:""}`;
+    // ()内は記録打数ではなくスコア（ペナルティ調整後の最終打数）＋ホールごとの±を表示（フィードバック20260728）
+    const scSet=((round.holeScore||{})[n]||{}).final!=null;
+    let lbl="";
+    if(cnt||scSet){
+      const fin=getFinal(n);
+      const par=((round.holes[n-1]||{}).par)||0;
+      const d=(fin&&par)?fin-par:null;
+      const ds=d==null?"":("・"+(d>0?`+${d}`:d===0?"±0":`${d}`));
+      lbl=`<span class="n">(${fin}${ds})</span>`;
+    }
+    b.innerHTML=`${dispHole(n)}H${lbl}`;
     b.onclick=()=>jumpToHole(n);
     el.appendChild(b);
   }
@@ -1700,7 +1713,8 @@ function renderShotList(){
   // 現在のホールのショットだけ表示（要望20260715 D4）。編集中はその打のホール
   const targetHole=editState?round.shots[editState.idx].hole:round.curHole;
   const curShots=round.shots.filter(s=>s.hole===targetHole);
-  document.getElementById("recBadge").textContent=`${dispHole(targetHole)}H：${curShots.length}打`;
+  const recPen=getPenalty(targetHole);
+  document.getElementById("recBadge").textContent=`${dispHole(targetHole)}H：${curShots.length}打${recPen?`＋ペナルティ${recPen}`:""}`;
   if(!curShots.length){el.innerHTML=`<li class="small" style="padding:8px;">このホールの記録はまだありません</li>`;return;}
   const holeNos=[targetHole];
   let html="";
@@ -1773,7 +1787,7 @@ function reopenRoundForEdit(){
   initRecordScreen(); showScreen("scrRecord");
 }
 function clearAllData(){
-  if(!confirm("進行中ラウンドの全記録を削除します。よろしいですか？"))return;
+  if(!confirm("進行中ラウンドの記録（全18ホール分のショット・スコア）をすべて削除します。\n※登録済みゴルフ場・過去ラウンドの履歴・基本情報・目標は消えません。\nよろしいですか？"))return;
   if(!confirm("本当に削除しますか？この操作は取り消せません。"))return;
   round=null; localStorage.removeItem(LS_CURRENT);
   renderCourseMaster(); showScreen("scrCourseMaster");
@@ -1816,7 +1830,7 @@ function roundStats(r){
   let parOn=0,bogeyOn=0,dblOn=0;
   perHole.forEach(h=>{
     if(!h.recorded||!h.par)return;
-    const reach=h.recorded-h.putts;                 // グリーンに乗るまでの打数
+    const reach=h.strokes-h.putts;                  // グリーンに乗るまでの打数（ペナルティ込みスコアで判定・フィードバック20260728）
     const diff=reach-(h.par-2);
     if(diff<=0)parOn++;
     else if(diff===1)bogeyOn++;
@@ -1871,13 +1885,13 @@ const BENCHMARKS=[
     {putts:36, one:2, three:2, ob:"1", note:"1パットと3パットが同数"},
     {putts:34, one:3, three:1, ob:"1", note:"パーとダブルボギーが同数"},
     {putts:32, one:4, three:0, ob:"2"}]},
-  {score:84, parOn:3,  within1:18, ob:"", fwKeep:"7/14",  variants:[
+  {score:84, parOn:3,  within1:18, ob:"0", fwKeep:"7/14",  variants:[      // 目標90未満はOB基準0回（要望20260728）
     {putts:33, one:4, three:1, note:"パーオンが1つもなくても1パット6回で達成"}]},
-  {score:78, parOn:6,  within1:18, ob:"", fwKeep:"9/14",  variants:[
+  {score:78, parOn:6,  within1:18, ob:"0", fwKeep:"9/14",  variants:[
     {putts:32, one:4, three:0, note:"パーオンしていない12ホールのうち半分で1パット"}]},
-  {score:72, parOn:12, within1:18, ob:"", fwKeep:"11/14", variants:[
+  {score:72, parOn:12, within1:18, ob:"0", fwKeep:"11/14", variants:[
     {putts:30, one:6, three:0, note:"42ショット30パット"}]},
-  {score:68, parOn:15, within1:18, ob:"", fwKeep:"13/14", variants:[
+  {score:68, parOn:15, within1:18, ob:"0", fwKeep:"13/14", variants:[
     {putts:29, one:7, three:0, note:"パー5の2オン"}]}
 ];
 // 目標スコアに対する基準値と実績の差異行を生成（要望K3・20260722）
@@ -1906,7 +1920,7 @@ function benchmarkLines(r,st){
   const bm={ score:lerp(bmA.score,bmB.score), parOn:lerp(bmA.parOn,bmB.parOn),
     within1:lerp(bmA.within1,bmB.within1), putts:lerp(vA.putts,vB.putts) };
   const near=(t<=0.5)?{bm:bmA,v:vA}:{bm:bmB,v:vB};            // テキスト項目は目標に近い側の行から
-  const obBasis=near.v.ob||near.bm.ob;
+  const obBasis=(goal<90)?"0":(near.v.ob||near.bm.ob);   // 目標90未満はOB基準0回（要望20260728）
   const fwBasis=near.bm.fwKeep;
   const within1=st.parOn+st.bogeyOn;
   const d=(v)=>v>0?`+${v}`:`${v}`;
@@ -1948,7 +1962,7 @@ function holeParDiff(h){
 }
 function holeOnMark(h){
   if(h.status||!h.par||!h.recorded)return "";
-  const d=(h.recorded-h.putts)-(h.par-2);
+  const d=(h.strokes-h.putts)-(h.par-2);   // ペナルティ込みスコアで判定（フィードバック20260728）
   return d<=-1?"◎":d===0?"○":d===1?"△":d===2?"□":"×";
 }
 
@@ -2038,10 +2052,27 @@ function renderSheet(r){
       const diff=st.totalStrokes-iv.goalScore;
       achieve=`<span class="badge">目標 ${iv.goalScore} / 結果 ${st.totalStrokes}</span> <span class="pill ${diff<=0?"":"warn"}">${diff<=0?`達成（${diff}）`:`未達（+${diff}）`}</span>`;
     }
-    if(iv.goalLine)achieve+=` <span class="badge">目標ライン：${esc(iv.goalLine)}</span>`;
+    // 目標ラインも達成判定を表示（フィードバック20260728）
+    if(iv.goalLine){
+      const th=parseInt(iv.goalLine);
+      if(th&&st.totalStrokes){
+        const ok=st.totalStrokes<th;
+        achieve+=` <span class="badge">目標ライン ${esc(iv.goalLine)}</span> <span class="pill ${ok?"":"warn"}">${ok?"達成":"未達"}</span>`;
+      }else achieve+=` <span class="badge">目標ライン：${esc(iv.goalLine)}</span>`;
+    }
+    // 今日の目標・意識ポイントはキーワードに応じた関連実績を添える（フィードバック20260728）
+    const goalFb=txt=>{
+      const fb=[];
+      if(/3パット/.test(txt))fb.push(`3パット ${st.threePutts}回`);
+      else if(/パット/.test(txt))fb.push(`パット数 ${st.totalPutts}`);
+      if(/OB/i.test(txt))fb.push(`OB ${st.ob}回`);
+      if(/フェアウェイ|FW/i.test(txt))fb.push(`FWキープ ${st.fwKeep}/${st.fwTotal}`);
+      if(/パーオン/.test(txt))fb.push(`パーオン ${st.parOn}回`);
+      return fb.length?` <span class="small">（関連実績：${fb.join("・")}）</span>`:"";
+    };
     intentHtml=`<h3>目標・達成度</h3><div>${achieve}</div>
-      ${iv.goal?`<div style="margin-top:4px;"><b>今日の目標：</b>${esc(iv.goal)}</div>`:""}
-      ${iv.focus?`<div style="margin-top:2px;"><b>意識したいポイント：</b>${esc(iv.focus)}</div>`:""}`;
+      ${iv.goal?`<div style="margin-top:4px;"><b>今日の目標：</b>${esc(iv.goal)}${goalFb(iv.goal)}</div>`:""}
+      ${iv.focus?`<div style="margin-top:2px;"><b>意識したいポイント：</b>${esc(iv.focus)}${goalFb(iv.focus)}</div>`:""}`;
   }
   document.getElementById("sheetArea").innerHTML=`
     <div style="border-bottom:3px solid var(--primary);padding-bottom:8px;">
@@ -2228,7 +2259,20 @@ function sheetToImage(share){
           try{ await navigator.share({files:[file],title:"ゴルフリフレクション",text:`${sheetRound.date} ${sheetRound.courseName} のリフレクションシート`}); return; }
           catch(e){ if(e.name==="AbortError")return; }
         }
-        alert("この端末では共有機能が使えません。下のプレビュー画像を長押しして保存・共有してください。");
+        // 共有API非対応（LINE内ブラウザ等）：テキストをLINE共有し、画像は長押しを案内（フィードバック20260728）
+        alert("この端末では画像の共有メニューが使えないため、LINEでテキストを共有します。\n画像は下のプレビューを長押しして保存・共有してください。");
+        const sst=roundStats(sheetRound);
+        const stext=`${sheetRound.date} ${sheetRound.courseName} スコア${sst.totalStrokes}（パット${sst.totalPutts}）`;
+        try{await navigator.clipboard.writeText(stext);}catch(_){}
+        window.open("https://line.me/R/share?text="+encodeURIComponent(stext));
+        img.scrollIntoView({behavior:"smooth"});
+        return;
+      }
+      // ダウンロード非対応ブラウザ（LINE内ブラウザ等）はプレビュー長押しを案内（フィードバック20260728）
+      const canDL=("download" in HTMLAnchorElement.prototype)&&!/Line\//i.test(navigator.userAgent);
+      if(!canDL){
+        alert("このブラウザはファイルのダウンロードに対応していません。\n下に表示したプレビュー画像を長押しして「画像を保存」してください。\n（LINEから開いている場合は、右上メニューから Chrome などのブラウザで開くと保存できます）");
+        img.scrollIntoView({behavior:"smooth"});
         return;
       }
       const a=document.createElement("a");
@@ -2272,8 +2316,12 @@ function exportCSV(r){
 /* ============ 過去ラウンド ============ */
 function renderHistory(){
   const el=document.getElementById("historyList");
-  if(!history.length){el.innerHTML=`<div class="small">過去ラウンドはありません。</div>`;return;}
-  el.innerHTML=history.slice().reverse().map((r,revIdx)=>{
+  // 進行中ラウンドがあれば過去ラウンドからも再開できるようにする（フィードバック20260728）
+  const resumeCard=(round&&round.shots)?`<div class="course-item" style="border-color:var(--primary);" onclick="resumeRound()">
+      <div class="name">▶ ラウンド再開：${esc(round.courseName)}</div>
+      <div class="sub">${esc(round.date)}　記録済み ${round.shots.length}ショット　現在 ${dispHole(round.curHole)}H</div></div>`:"";
+  if(!history.length){el.innerHTML=resumeCard+`<div class="small">過去ラウンドはありません。</div>`;return;}
+  el.innerHTML=resumeCard+history.slice().reverse().map((r,revIdx)=>{
     const idx=history.length-1-revIdx;
     return `<div class="course-item">
       <div class="name">${esc(r.date)}　${esc(r.courseName)}</div>
@@ -2292,6 +2340,40 @@ function deleteHistory(idx){
   saveJSON(LS_HISTORY,history);
   renderHistory();
 }
+
+/* ============ スワイプでタブ移動（フィードバック20260728） ============ */
+function tabAvailableForSwipe(k){
+  if(k==="start")return !!setupSel.courseId;
+  if(k==="hole")return !!(round||sheetRound);
+  if(k==="result"||k==="summary")return !!(sheetRound||history.length);
+  return true;
+}
+(function(){
+  let sx=0,sy=0,swTarget=null;
+  document.addEventListener("touchstart",e=>{
+    if(e.touches.length!==1){swTarget=null;return;}
+    sx=e.touches[0].clientX; sy=e.touches[0].clientY; swTarget=e.target;
+  },{passive:true});
+  document.addEventListener("touchend",e=>{
+    const tgt=swTarget; swTarget=null;
+    if(!tgt)return;
+    const t=e.changedTouches[0];
+    const dx=t.clientX-sx, dy=t.clientY-sy;
+    if(Math.abs(dx)<70||Math.abs(dy)>50)return;   // 横に大きく・縦にほぼ動かないスワイプのみ
+    // 横スクロールできる要素（ホールストリップ・表・タブ行など）や入力欄の上では無効
+    for(let el=tgt;el&&el!==document.body;el=el.parentElement){
+      if(el.scrollWidth>el.clientWidth+2)return;
+      if(/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))return;
+    }
+    const keys=TABS.map(x=>x.key);
+    let i=keys.indexOf(window._curTabKey);
+    if(i<0)return;
+    const dir=dx<0?1:-1;
+    for(let j=i+dir;j>=0&&j<keys.length;j+=dir){
+      if(tabAvailableForSwipe(keys[j])){goTab(keys[j]);return;}
+    }
+  },{passive:true});
+})();
 
 /* ============ 初期化 ============ */
 document.addEventListener("DOMContentLoaded",()=>{
