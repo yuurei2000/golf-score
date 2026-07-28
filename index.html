@@ -343,11 +343,10 @@ td.hno{font-weight:800;background:#f9fafb;}
     <label class="required" style="margin-top:0;">クラブ</label>
     <div class="btn-grid" id="clubBtns"></div>
     <label class="required" id="resultLabel">結果</label>
-    <div class="btn-grid" id="resultBtns"></div>
-    <!-- Par4・5の1打目のみ表示：フェアウェイキープ記録（要望20260726 I2） -->
-    <div id="fwBox" style="display:none;margin-top:6px;">
-      <label>1打目フェアウェイ（Par4・5）</label>
-      <div class="btn-grid one-line" id="fwBtns"></div>
+    <!-- FWキープは○△×ボタンの横に表示。Par4・5の1打目のみ（要望20260726 I2・20260728） -->
+    <div style="display:flex;gap:6px;align-items:stretch;">
+      <div class="btn-grid" id="resultBtns" style="flex:1 1 auto;"></div>
+      <div class="btn-grid" id="fwBox" style="display:none;flex:0 0 auto;"><span id="fwBtns" style="display:contents;"></span></div>
     </div>
     <div id="missBox">
       <label style="color:var(--warn);">ミス内容</label>
@@ -1206,7 +1205,7 @@ function buildRecordButtons(){
   buildBtns("lieBtns",LIES,(v,b,el)=>{shot.lie=v;selectSingle(el,v);togglePuttBox();updateRegisterState();});
   buildBtns("resultBtns",RESULTS.map(r=>r.key),(v,b,el)=>{shot.result=v;selectSingle(el,v);toggleMissBox();updateRegisterState();},{big:true});
   // FWキープ（Par4・5の1打目のみ表示・タップでON/OFF）（要望20260726 I2）
-  buildBtns("fwBtns",["FWキープ"],(v,b)=>{shot.fw=!shot.fw;b.classList.toggle("selected",shot.fw);});
+  buildBtns("fwBtns",["FWキープ"],(v,b)=>{shot.fw=!shot.fw;b.classList.toggle("selected",shot.fw);},{big:true});
   // パットまとめ入力の1stパット詳細（要望20260726 D2）
   buildBtns("pqDistBtns",PUTT_DIST,(v,b,el)=>{pqDetail.dist=(pqDetail.dist===v)?null:v;selectSingle(el,pqDetail.dist);});
   buildBtns("pqLineBtns",PUTT_LINE,(v,b,el)=>{pqDetail.line=toggleAxisSel(pqDetail.line,v,PUTT_LINE_AXES,el);});
@@ -1484,7 +1483,7 @@ function updateFwBox(){
   if(!round||(shot&&shot.club==="PT"&&!editState)){box.style.display="none";return;}   // PT通常記録中は非表示（要望20260726）
   const stroke=editState?round.shots[editState.idx].stroke:round.curStroke;
   const par=editState?round.shots[editState.idx].par:((round.holes[round.curHole-1]||{}).par);
-  box.style.display=(stroke===1&&(par===4||par===5))?"block":"none";
+  box.style.display=(stroke===1&&(par===4||par===5))?"flex":"none";   // ○△×の横に並べる（btn-grid）
   const b=box.querySelector(".opt-btn"); if(b)b.classList.toggle("selected",!!(shot&&shot.fw));
 }
 function updateFooterMode(){
