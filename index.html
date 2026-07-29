@@ -264,8 +264,7 @@ td.hno{font-weight:800;background:#f9fafb;}
     </div>
     <!-- 目標スコアに応じたコメント（基準値表＋一般セオリー・要望20260729） -->
     <div id="goalCommentBox" style="margin-top:8px;padding:10px 12px;background:var(--primary2);border:1.5px solid var(--primary);border-radius:12px;font-size:13px;line-height:1.6;"></div>
-    <label>目標ライン</label>
-    <div class="btn-grid" id="goalLineBtns"></div>
+    <!-- 目標ラインは廃止（要望20260729：目標スコアで代替） -->
     <label>今日の目標</label>
     <textarea id="intentGoal" rows="2" style="min-height:56px;" placeholder="例：ボギーペースで回る／3パットを減らす"></textarea>
     <label>意識したいポイント</label>
@@ -776,8 +775,6 @@ function renderIntent(){
   document.getElementById("goalScoreVal").textContent=intent.goalScore;
   document.getElementById("intentGoal").value=intent.goal||"";
   document.getElementById("intentFocus").value=intent.focus||"";
-  buildBtns("goalLineBtns",GOAL_LINES,(v,b,el)=>{intent.goalLine=v;selectSingle(el,v);});
-  if(intent.goalLine)selectSingle(document.getElementById("goalLineBtns"),intent.goalLine);
   renderGoalComment();
 }
 function adjGoalScore(d){
@@ -788,11 +785,22 @@ function adjGoalScore(d){
 /* 目標スコアに応じたコメント（スコア別基準値表＋一般的なセオリーの要約・要望20260729） */
 function goalCommentLines(goal){
   const bands=[
+    {score:120, lines:[
+      "トリプルボギーとダブルボギーが半々くらいの配分でも120は切れます。パー・ボギーは狙わなくてOKです。",
+      "最優先は1ホールの大叩き（+4以上）をなくすこと。OBや池の方向へは最初から打たないクラブ選択を。",
+      "ティーショットはドライバーにこだわらず、確実に前へ進むクラブで。空振り・チョロを減らすだけでスコアは縮みます。",
+      "パット数は45以内が目安。ロングパットはカップに寄せるだけ、グリーン周りは転がしで確実に。"]},
+    {score:110, lines:[
+      "ダブルボギーペースが基本形（ダボ14・ボギー2・トリプル2くらいの配分）。トリプル以上を4ホール以内に抑えましょう。",
+      "パーオンは不要。ダボオン（Par+2打で乗せ）→2パットで十分です。",
+      "パット数は42以内、3パットは5回まで。1〜2mを確実に入れる練習が効きます。",
+      "OBは4回まで。バンカー・池などのハザードは最初から避けるルート選びを。1つ入ると2〜3打余分に叩きます。"]},
     {score:99, lines:[
       "ダブルボギーとボギーが半々（ボギー9・ダボ9）を目指しましょう。パーは不要です。",
       "パーオンは必要ありません。ボギーオン（パーオン+1以内）を9ホール目指しましょう。",
       "パット数は39以内、3パットは3回まで。18ホール中9ホールを2パットで上がるイメージです。",
-      "OBは3回まで。大叩きを避ける安全なクラブ選択（ティーショットはドライバーにこだわらない）が近道です。"]},
+      "OBは3回まで。バンカーや池などのハザードは徹底的に避け、グリーンを無理に狙わず花道の広い安全ルートへ運びましょう。",
+      "ハザードを避けるだけでメンタルもスコアも崩れにくくなります。カッコよさより「自分のベストルート」を選ぶ勇気を。"]},
     {score:90, lines:[
       "ボギーペースが基本形。パー2＋ボギー14＋ダボ2くらいの配分を目指しましょう。",
       "パーオン2回・ボギーオン以内16/18が目安。ボギーオン＋2パットを積み重ね、3ホールほど寄せワンでパーが取れると理想です。",
