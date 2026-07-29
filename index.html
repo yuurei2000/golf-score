@@ -262,6 +262,8 @@ td.hno{font-weight:800;background:#f9fafb;}
       <span class="val" id="goalScoreVal">90</span>
       <button type="button" onclick="adjGoalScore(1)">＋</button>
     </div>
+    <!-- 目標スコアに応じたコメント（基準値表＋一般セオリー・要望20260729） -->
+    <div id="goalCommentBox" style="margin-top:8px;padding:10px 12px;background:var(--primary2);border:1.5px solid var(--primary);border-radius:12px;font-size:13px;line-height:1.6;"></div>
     <label>目標ライン</label>
     <div class="btn-grid" id="goalLineBtns"></div>
     <label>今日の目標</label>
@@ -776,10 +778,50 @@ function renderIntent(){
   document.getElementById("intentFocus").value=intent.focus||"";
   buildBtns("goalLineBtns",GOAL_LINES,(v,b,el)=>{intent.goalLine=v;selectSingle(el,v);});
   if(intent.goalLine)selectSingle(document.getElementById("goalLineBtns"),intent.goalLine);
+  renderGoalComment();
 }
 function adjGoalScore(d){
   intent.goalScore=Math.max(36,Math.min(200,(intent.goalScore||90)+d));
   document.getElementById("goalScoreVal").textContent=intent.goalScore;
+  renderGoalComment();
+}
+/* 目標スコアに応じたコメント（スコア別基準値表＋一般的なセオリーの要約・要望20260729） */
+function goalCommentLines(goal){
+  const bands=[
+    {score:99, lines:[
+      "ダブルボギーとボギーが半々（ボギー9・ダボ9）を目指しましょう。パーは不要です。",
+      "パーオンは必要ありません。ボギーオン（パーオン+1以内）を9ホール目指しましょう。",
+      "パット数は39以内、3パットは3回まで。18ホール中9ホールを2パットで上がるイメージです。",
+      "OBは3回まで。大叩きを避ける安全なクラブ選択（ティーショットはドライバーにこだわらない）が近道です。"]},
+    {score:90, lines:[
+      "ボギーペースが基本形。パー2＋ボギー14＋ダボ2くらいの配分を目指しましょう。",
+      "パーオン2回・ボギーオン以内16/18が目安。ボギーオン＋2パットを積み重ね、3ホールほど寄せワンでパーが取れると理想です。",
+      "パット数は34〜36、3パットは1〜2回まで。1パットを3回取れると楽になります。",
+      "OBは1〜2回まで、FWキープは5/14が目安。ティーショットは飛距離より方向重視で。"]},
+    {score:84, lines:[
+      "パー6＋ボギー12のイメージ。全ホールでボギーオン（18/18）することが土台です。",
+      "パーオン3回・FWキープ7/14が目安。OBは0回に抑えましょう。",
+      "パット数33、3パットは1回まで。パーオンがゼロでも寄せワン（1パット）6回で達成できます。アプローチ練習が効きます。"]},
+    {score:78, lines:[
+      "パー12＋ボギー6ペース。パーオン6回、全ホールボギーオン以内が目安です。",
+      "FWキープ9/14、OBゼロが前提。ミスしても必ずボギーで収めるマネジメントを。",
+      "パット数32、1パット4回。パーオンしていない12ホールのうち半分で寄せワンを取りましょう。"]},
+    {score:72, lines:[
+      "パープレー。42ショット＋30パットの計算です。",
+      "パーオン12回・FWキープ11/14が目安。OBゼロは大前提です。",
+      "パット数30、1パット6回・3パットゼロ。ショートゲームの精度が生命線です。"]},
+    {score:68, lines:[
+      "アンダーパー。バーディー4〜5回が必要で、パー5の2オンなど攻める戦略も組み込みます。",
+      "パーオン15回・FWキープ13/14が目安。",
+      "パット数29、1パット7回。バーディーパットを決める距離感が鍵です。"]}
+  ];
+  return bands.reduce((a,b)=>Math.abs(b.score-goal)<Math.abs(a.score-goal)?b:a).lines;
+}
+function renderGoalComment(){
+  const el=document.getElementById("goalCommentBox"); if(!el)return;
+  const g=intent.goalScore||90;
+  el.innerHTML=`<b style="color:var(--primary);">目標${g}へのポイント</b>`+
+    goalCommentLines(g).map(l=>`<div style="padding:2px 0;">・${esc(l)}</div>`).join("");
 }
 function saveIntent(){
   intent.goalScore=parseInt(document.getElementById("goalScoreVal").textContent)||90;
@@ -1494,6 +1536,8 @@ function updateRegisterState(){
 function updateFwBox(){
   const box=document.getElementById("fwBox"); if(!box)return;
   if(!round||(shot&&shot.club==="PT"&&!editState)){box.style.display="none";return;}   // PT通常記録中は非表示（要望20260726）
+  const goal=((round.intent&&round.intent.goalScore)||intent.goalScore||90);
+  if(goal>90){box.style.display="none";return;}   // 目標スコアが90より大きい場合はFWキープ記録不要（要望20260729）
   const stroke=editState?round.shots[editState.idx].stroke:round.curStroke;
   const par=editState?round.shots[editState.idx].par:((round.holes[round.curHole-1]||{}).par);
   box.style.display=(stroke===1&&(par===4||par===5))?"flex":"none";   // ○△×の横に並べる（btn-grid）
@@ -1881,7 +1925,7 @@ const BENCHMARKS=[
     {putts:39, one:0, three:3, note:"ダブルボギーとボギーが半々"},
     {putts:39, one:1, three:4, note:"トリプルボギーが出たらパーが同じ数必要"},
     {putts:39, one:2, three:5, note:"トリプルボギーが出たらパーが同じ数必要"}]},
-  {score:90, parOn:2,  within1:16, ob:"1〜2", fwKeep:"", variants:[
+  {score:90, parOn:2,  within1:16, ob:"1〜2", fwKeep:"5/14", variants:[   // 目標90のFWキープ基準は5/14（要望20260729）
     {putts:36, one:2, three:2, ob:"1", note:"1パットと3パットが同数"},
     {putts:34, one:3, three:1, ob:"1", note:"パーとダブルボギーが同数"},
     {putts:32, one:4, three:0, ob:"2"}]},
@@ -2027,7 +2071,7 @@ function renderSheet(r){
   const hits=topEntries(st.hitCnt).map(([k,v])=>`<span class="pill err">${esc(k)} ${v}回</span>`).join(" ")||"<span class='small'>なし</span>";
   const puttTend=[...topEntries(st.puttLineCnt),...topEntries(st.puttTouchCnt)].map(([k,v])=>`<span class="pill">${esc(k)} ${v}回</span>`).join(" ")||"<span class='small'>記録なし</span>";
   const clubs=Object.entries(st.clubStat).map(([c,s])=>({c,n:s.n,rate:Math.round(s.sum/s.n*100)})).sort((a,b)=>a.rate-b.rate);
-  const weakClubs=clubs.filter(c=>c.n>=2).slice(0,3);
+  const weakClubs=clubs.filter(c=>c.n>=2&&c.rate<=70).slice(0,3);   // 70%以下のみ「成功率が低い」扱い（要望20260729）
   // 成功率表は基本情報のクラブ順（DR→…→PT）で表示（要望20260726 F2）
   const scOm=clubOrderMap();
   let clubRows=clubs.slice().sort((a,b)=>(scOm[a.c]||99)-(scOm[b.c]||99)).map(c=>`<tr><td>${esc(c.c)}</td><td>${c.n}</td><td>${c.rate}%</td></tr>`).join("");
@@ -2220,7 +2264,7 @@ function drawSheetCanvas(r){
   const lines=[];
   if(topCause)lines.push(`最多のミス原因：${topCause[0]}（${topCause[1]}回）`);
   if(st.threePutts)lines.push(`3パット ${st.threePutts}ホール → ロングパット距離感の練習`);
-  const weak=Object.entries(st.clubStat).map(([c,s])=>({c,n:s.n,rate:Math.round(s.sum/s.n*100)})).filter(x=>x.n>=2).sort((a,b)=>a.rate-b.rate).slice(0,3);
+  const weak=Object.entries(st.clubStat).map(([c,s])=>({c,n:s.n,rate:Math.round(s.sum/s.n*100)})).filter(x=>x.n>=2&&x.rate<=70).sort((a,b)=>a.rate-b.rate).slice(0,3);   // 70%以下のみ（要望20260729）
   if(weak.length)lines.push(`成功率の低いクラブ：${weak.map(x=>`${x.c}(${x.rate}%)`).join("、")}`);
   benchmarkLines(r,st).forEach(l=>lines.push(l));   // 基準値一覧との差異（要望K3）
   if(!lines.length)lines.push("大きな課題なし。この調子で！");
