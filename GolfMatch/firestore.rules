@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // コースマスタ：URLを知っている人は誰でも登録・編集できる（MVP）
+    match /courses/{courseId} {
+      allow read, write: if true;
+    }
+
+    match /games/{gameId} {
+      // ゲーム本体（公開情報：プレイヤー・組・コース・設定）
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if false;
+
+      // トークン（管理者・各組入力担当者）：誰も読めない。作成時に1回だけ書ける
+      match /private/tokens {
+        allow read: if false;
+        allow create: if !exists(/databases/$(database)/documents/games/$(gameId)/private/tokens);
+        allow update, delete: if false;
+      }
+
+      // 組ごとのスコア：閲覧は自由。書き込みはその組の担当者トークンか管理者トークンを持つ人だけ
+      match /scores/{groupNo} {
+        allow read: if true;
+        allow create, update: if request.resource.data.tok is string
+          && (request.resource.data.tok == get(/databases/$(database)/documents/games/$(gameId)/private/tokens).data.adminToken
+           || request.resource.data.tok == get(/databases/$(database)/documents/games/$(gameId)/private/tokens).data.scorers[groupNo]);
+        allow delete: if false;
+      }
+    }
+  }
+}

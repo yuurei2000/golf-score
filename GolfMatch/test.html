@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><title>match-core テスト</title>
+<style>body{font-family:sans-serif;padding:16px;font-size:14px}.ok{color:#1f7a4d}.ng{color:#b42318;font-weight:700}pre{background:#f4f4f4;padding:8px}</style>
+</head><body>
+<h2>match-core.js 自動テスト</h2>
+<div id="out"></div>
+<script src="match-core.js"></script>
+<script>
+const out=document.getElementById("out"); let pass=0,fail=0;
+function eq(name,actual,expected){
+  const a=JSON.stringify(actual),e=JSON.stringify(expected);
+  const ok=a===e; if(ok)pass++; else fail++;
+  out.insertAdjacentHTML("beforeend",`<div class="${ok?"ok":"ng"}">${ok?"✔":"✘"} ${name}${ok?"":`<pre>expected ${e}\nactual   ${a}</pre>`}</div>`);
+}
+const C=MatchCore;
+// コース：HDCP は 1..18 を適当に並べる
+const holes=Array.from({length:18},(_,i)=>({no:i+1,par:[4,5,3,4,4,3,5,4,4,4,3,5,4,4,5,3,4,4][i],hcp:[7,3,15,1,9,17,5,11,13,2,16,4,10,8,6,18,12,14][i]}));
+const hcpOf=no=>holes.find(h=>h.no===no).hcp;
+
+/* §9 ハンデ差6：HDCP1〜6のホールでBが1打 */
+eq("差6 HDCP1のホール → B 1打", C.calculateStrokeAllowance(10,16,1,true),{a:0,b:1});
+eq("差6 HDCP6のホール → B 1打", C.calculateStrokeAllowance(10,16,6,true),{a:0,b:1});
+eq("差6 HDCP7のホール → なし",   C.calculateStrokeAllowance(10,16,7,true),{a:0,b:0});
+eq("Aのほうが大きい場合はAがもらう", C.calculateStrokeAllowance(16,10,3,true),{a:1,b:0});
+/* §10 差20：全ホール1打＋HDCP1・2は2打 */
+eq("差20 HDCP1 → 2打", C.calculateStrokeAllowance(5,25,1,true),{a:0,b:2});
+eq("差20 HDCP2 → 2打", C.calculateStrokeAllowance(5,25,2,true),{a:0,b:2});
+eq("差20 HDCP3 → 1打", C.calculateStrokeAllowance(5,25,3,true),{a:0,b:1});
+eq("差20 HDCP18 → 1打", C.calculateStrokeAllowance(5,25,18,true),{a:0,b:1});
+eq("差40 HDCP4 → 3打（36+4）", C.calculateStrokeAllowance(0,40,4,true),{a:0,b:3});
+eq("差40 HDCP5 → 2打", C.calculateStrokeAllowance(0,40,5,true),{a:0,b:2});
+/* §12 スクラッチ */
+eq("スクラッチ戦はハンデなし", C.calculateStrokeAllowance(5,25,1,false),{a:0,b:0});
+/* §11 ネット・ホール勝敗 */
+eq("ネット同点はAS", C.calculateHoleResult(5,5),"AS");
+eq("ネット少ない方が勝ち", C.calculateHoleResult(5,4),"B");
+
+/* §15 組の進行差：Aは10Hまで、Bは9Hまで → 9Hまでで判定 */
+const A={id:"a",name:"山科",handicap:10,displayOrder:1}, B={id:"b",name:"高橋",handicap:16,displayOrder:2};
+const scores={a:{},b:{}};
+for(let h=1;h<=10;h++)scores.a[h]=4;          // Aは全ホール4
+for(let h=1;h<=9;h++)scores.b[h]=(h<=2)?5:4;  // Bは1,2Hで5、他4（ハンデ戦なら HDCP<=6 のホールで1打）
+let m=C.calculateMatchStatus(A,B,holes,scores,false);
+eq("スクラッチ：9Hまで採点（thru=9）", m.thru,9);
+eq("スクラッチ：A 2UP", [m.up,m.label],[2,"2UP"]);
+eq("表示ラベル", C.matchLabel(m),"山科 2UP");
+m=C.calculateMatchStatus(A,B,holes,scores,true);
+// ハンデ戦：Bは HDCP<=6 のホール(2H:3,4H:1,7H:5,10H:2,12H:4,15H:6)で1打。9Hまでの対象=2,4,7H
+// 1H: 4 vs 5 → A勝ち(+1) / 2H: 4 vs 5-1=4 AS / 4H: 4 vs 4-1=3 B勝ち(0) / 7H: 4 vs 3 B勝ち(-1)
+eq("ハンデ戦：B 1UP（9H時点）", [m.up,m.thru,C.matchLabel(m)],[-1,9,"高橋 1UP"]);
+eq("ホール詳細にハンデ表示", m.holes[1].allowB,1);
+
+/* §32 早期決着：16H終了で3UP → 3&2 */
+const s2={a:{},b:{}};
+for(let h=1;h<=16;h++){s2.a[h]=4;s2.b[h]=(h<=3)?5:4;}
+m=C.calculateMatchStatus(A,B,holes,s2,false);
+eq("3&2で成立", [m.closed,m.finished,m.label,C.matchLabel(m)],[true,true,"3&2","山科 3&2"]);
+// 成立後に17H,18Hを入力しても結果は変わらない
+s2.a[17]=6;s2.b[17]=3;s2.a[18]=6;s2.b[18]=3;
+m=C.calculateMatchStatus(A,B,holes,s2,false);
+eq("成立後のホールは採点しない", [m.up,m.thru,m.label],[3,16,"3&2"]);
+/* 18H終了 1UP */
+const s3={a:{},b:{}};for(let h=1;h<=18;h++){s3.a[h]=4;s3.b[h]=(h===18)?5:4;}
+m=C.calculateMatchStatus(A,B,holes,s3,false);
+eq("18H終了 1UP（&なし）", [m.finished,m.label],[true,"1UP"]);
+const s4={a:{},b:{}};for(let h=1;h<=18;h++){s4.a[h]=4;s4.b[h]=4;}
+m=C.calculateMatchStatus(A,B,holes,s4,false);
+eq("18H終了 AS（引分）", [m.finished,m.up,C.matchLabel(m)],[true,0,"AS（引分）"]);
+/* 未入力（途中）：15Hで3UPは成立しない（残り3） */
+const s5={a:{},b:{}};for(let h=1;h<=15;h++){s5.a[h]=4;s5.b[h]=(h<=3)?5:4;}
+m=C.calculateMatchStatus(A,B,holes,s5,false);
+eq("15H 3UP は未成立", [m.closed,m.finished,m.label],[false,false,"3UP"]);
+
+/* §13〜14 総当たり数 */
+const mk=n=>Array.from({length:n},(_,i)=>({id:"p"+i,name:"P"+i,handicap:0,displayOrder:i}));
+[2,3,4,5,6,7,8].forEach(n=>eq(`${n}人 → ${n*(n-1)/2}マッチ`, C.calculateAllMatches(mk(n),holes,{},false).length, n*(n-1)/2));
+
+/* §22〜23 順位：勝利数→引分→UP合計、暫定フラグ */
+const P=mk(3); const sc={p0:{},p1:{},p2:{}};
+for(let h=1;h<=18;h++){sc.p0[h]=4;sc.p1[h]=5;sc.p2[h]=(h%2)?4:5;} // p0 全勝、p2 は p0 に負け p1 に勝ち
+let ms=C.calculateAllMatches(P,holes,sc,false); let st=C.calculatePlayerStandings(P,ms);
+eq("順位：P0,P2,P1", st.rows.map(r=>r.player.id),["p0","p2","p1"]);
+eq("W/D/L", st.rows.map(r=>[r.w,r.d,r.l]),[[2,0,0],[1,0,1],[0,0,2]]);
+eq("全18H終了 → 確定", st.provisional,false);
+const sc3={p0:{},p1:{},p2:{}};for(let h=1;h<=17;h++){sc3.p0[h]=4;sc3.p1[h]=4;sc3.p2[h]=4;}
+sc3.p0[18]=3;sc3.p2[18]=4;   // p1の18Hだけ未入力 → p0-p1 は17H時点ASで未成立
+ms=C.calculateAllMatches(P,holes,sc3,false); st=C.calculatePlayerStandings(P,ms);
+eq("未終了マッチあり → 暫定", st.provisional,true);
+eq("暫定でも現在状態でW/D/L集計（p0：W1 D1）", [st.rows[0].player.id,st.rows[0].w,st.rows[0].d],["p0",1,1]);
+/* 同順位 */
+const sc2={p0:{},p1:{},p2:{}};for(let h=1;h<=18;h++){sc2.p0[h]=4;sc2.p1[h]=4;sc2.p2[h]=4;}
+st=C.calculatePlayerStandings(P,C.calculateAllMatches(P,holes,sc2,false));
+eq("全員引分は全員1位", st.rows.map(r=>r.rank),[1,1,1]);
+
+/* §24 ストローク集計 */
+const ss=C.strokeSummary(B,holes,{b:{1:5,2:5,3:4,10:6}},true);
+eq("OUT/IN/TOTAL", [ss.out,ss.in,ss.gross,ss.played],[14,6,20,4]);
+// B(16)：1H hcp7,2H hcp3,3H hcp15,10H hcp2 はすべて16以下→各1打 → allow4, net16, par合計 4+5+3+4=16 → ±+4 / net±0
+eq("個人ハンデ配分のNET/±", [ss.allow,ss.net,ss.diff,ss.netDiff],[4,16,4,0]);
+/* 個人ハンデ配分：18H合計＝ハンデ */
+const sumAllow=h=>holes.reduce((a,x)=>a+C.personalAllowance(h,x.hcp,true),0);
+eq("個人配分 合計＝HDCP（16）", sumAllow(16),16);
+eq("個人配分 合計＝HDCP（25：全H1打＋7H）", sumAllow(25),25);
+eq("スクラッチは0", C.personalAllowance(16,1,false),0);
+/* ランダム配分：1〜18の順列 */
+const ro=C.randomHcpOrder();
+eq("ランダム配分は1〜18の順列", ro.slice().sort((a,b)=>a-b),Array.from({length:18},(_,i)=>i+1));
+const ro2=C.randomHcpOrder(()=>0.5);
+eq("同じ乱数なら同じ結果（再現性）", C.randomHcpOrder(()=>0.5),ro2);
+
+/* §26 コース検証 */
+eq("正しいコースはエラーなし", C.validateCourse({name:"X",holes}).length,0);
+const bad=JSON.parse(JSON.stringify(holes)); bad[0].hcp=3;
+eq("HDCP重複を検出", C.validateCourse({name:"X",holes:bad})[0].includes("重複"),true);
+const bad2=JSON.parse(JSON.stringify(holes)); bad2[5].par=7;
+eq("Par範囲外を検出", C.validateCourse({name:"X",holes:bad2}).some(e=>e.includes("Par")),true);
+
+out.insertAdjacentHTML("afterbegin",`<h3 class="${fail?"ng":"ok"}">結果：${pass} 件成功 / ${fail} 件失敗</h3>`);
+window.__testResult={pass,fail};
+</script>
+</body></html>
