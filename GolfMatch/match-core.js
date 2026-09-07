@@ -33,23 +33,46 @@ const MatchCore = (() => {
      両者が入力済みのホールだけをホール番号順に採点する（組の進行差に対応）。
      |UP| が残りホール数を超えた時点で成立（例：16H終了 3UP → 3&2）。
      戻り値：{ a, b, up(正=Aリード), thru, closed, finished, leader, label, holes[], outcomeA } */
-  function calculateMatchStatus(pA, pB, holes, scores, handicapEnabled) {
+  /* ---- プレー順（INスタートなら 10→18→1→9）---- */
+  function playOrder(startSide) {
+    const a = Array.from({ length: 18 }, (_, i) => i + 1);
+    return startSide === "in" ? a.slice(9).concat(a.slice(0, 9)) : a;
+  }
+
+  /* ---- ホールのハンデ順位：プレイヤー別ランダムモードでは各自の順位表（player.hcpRanks[holeNo]）を使う ---- */
+  function holeRankFor(player, hole, perPlayer) {
+    return (perPlayer && player && player.hcpRanks && player.hcpRanks[hole.no]) ? player.hcpRanks[hole.no] : hole.hcp;
+  }
+  /* ---- 対戦でのホール別ハンデ ----
+     通常：2人のハンデ差を Hole HDCP 順に配る（calculateStrokeAllowance）
+     プレイヤー別ランダム：各自のハンデを各自専用のランダム順位で配り、ネット同士で勝負（同じハンデでも付くホールが違う） */
+  function matchAllowance(pA, pB, h, handicapEnabled, perPlayer) {
+    if (!handicapEnabled) return { a: 0, b: 0 };
+    if (perPlayer) return { a: personalAllowance(pA.handicap, holeRankFor(pA, h, true), true),
+                            b: personalAllowance(pB.handicap, holeRankFor(pB, h, true), true) };
+    return calculateStrokeAllowance(pA.handicap, pB.handicap, h.hcp, true);
+  }
+
+  function calculateMatchStatus(pA, pB, holes, scores, handicapEnabled, holeOrder, opts) {
+    const perPlayer = !!(opts && opts.perPlayer);
     const sa = (scores && scores[pA.id]) || {}, sb = (scores && scores[pB.id]) || {};
-    const sorted = holes.slice().sort((x, y) => x.no - y.no);
+    const order = (holeOrder && holeOrder.length === 18) ? holeOrder : playOrder("out");
+    const byNo = {}; holes.forEach(h => { byNo[h.no] = h; });
     let up = 0, thru = 0, closed = false;
     const detail = [];
-    for (const h of sorted) {
+    for (let idx = 0; idx < order.length; idx++) {   // プレー順に採点（残りホール数もプレー順で数える）
+      const h = byNo[order[idx]]; if (!h) continue;
       const ga = sa[h.no], gb = sb[h.no];
       if (ga == null || gb == null) continue;      // 片方でも未入力なら対象外
       if (closed) break;                           // 成立後のホールは採点しない
-      const al = calculateStrokeAllowance(pA.handicap, pB.handicap, h.hcp, handicapEnabled);
+      const al = matchAllowance(pA, pB, h, handicapEnabled, perPlayer);
       const na = calculateNetScore(ga, al.a), nb = calculateNetScore(gb, al.b);
       const r = calculateHoleResult(na, nb);
       if (r === "A") up++; else if (r === "B") up--;
-      thru = h.no;
+      thru = idx + 1;                              // 消化ホール数（プレー順の位置）
       detail.push({ no: h.no, par: h.par, hcp: h.hcp, grossA: ga, grossB: gb,
         allowA: al.a, allowB: al.b, netA: na, netB: nb, result: r, up });
-      if (Math.abs(up) > 18 - h.no) closed = true;
+      if (Math.abs(up) > 18 - thru) closed = true;
     }
     const remaining = 18 - thru;
     const finished = closed || thru === 18;
@@ -67,12 +90,12 @@ const MatchCore = (() => {
   }
 
   /* ---- 全プレイヤーの総当たり（§13・§14）---- 組をまたいで C(n,2) を生成 */
-  function calculateAllMatches(players, holes, scores, handicapEnabled) {
+  function calculateAllMatches(players, holes, scores, handicapEnabled, holeOrder, opts) {
     const ps = players.slice().sort((x, y) => (x.displayOrder || 0) - (y.displayOrder || 0));
     const out = [];
     for (let i = 0; i < ps.length; i++)
       for (let j = i + 1; j < ps.length; j++)
-        out.push(calculateMatchStatus(ps[i], ps[j], holes, scores, handicapEnabled));
+        out.push(calculateMatchStatus(ps[i], ps[j], holes, scores, handicapEnabled, holeOrder, opts));
     return out;
   }
 
@@ -117,14 +140,14 @@ const MatchCore = (() => {
   }
 
   /* ---- ストローク集計（§24）---- gross/net とも Par との差（±）を返す */
-  function strokeSummary(player, holes, scores, handicapEnabled) {
+  function strokeSummary(player, holes, scores, handicapEnabled, perPlayer) {
     const s = (scores && scores[player.id]) || {};
     const sum = (from, to) => { let t = 0, n = 0; for (let h = from; h <= to; h++) if (s[h] != null) { t += s[h]; n++; } return { total: t, holes: n }; };
     const out = sum(1, 9), inn = sum(10, 18);
     const gross = out.total + inn.total, played = out.holes + inn.holes;
     const playedHoles = holes.filter(h => s[h.no] != null);
     const parPlayed = playedHoles.reduce((a, h) => a + h.par, 0);
-    const allow = playedHoles.reduce((a, h) => a + personalAllowance(player.handicap, h.hcp, handicapEnabled), 0);
+    const allow = playedHoles.reduce((a, h) => a + personalAllowance(player.handicap, holeRankFor(player, h, perPlayer), handicapEnabled), 0);
     const net = gross - allow;
     return { out: out.total, in: inn.total, gross, played, parPlayed, allow, net,
       diff: gross - parPlayed, netDiff: net - parPlayed };
@@ -156,6 +179,7 @@ const MatchCore = (() => {
   }
 
   return { calculateStrokeAllowance, calculateNetScore, calculateHoleResult, calculateMatchStatus,
-    calculateAllMatches, calculatePlayerStandings, matchLabel, strokeSummary, personalAllowance, randomHcpOrder, validateCourse };
+    calculateAllMatches, calculatePlayerStandings, matchLabel, strokeSummary, personalAllowance, holeRankFor, matchAllowance,
+    randomHcpOrder, playOrder, validateCourse };
 })();
 if (typeof module !== "undefined") module.exports = MatchCore;

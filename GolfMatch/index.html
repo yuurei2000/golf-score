@@ -5,20 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Match Play ～総当たりマッチ～</title>
 <style>
-:root{--primary:#0f766e;--primary2:#e6f4f1;--text:#16202a;--sub:#667085;--line:#d0d5dd;--bg:#f5f7f6;--danger:#b42318;--warn:#b54708;--win:#1f7a4d;--lose:#b42318;--as:#667085;}
+:root{--primary:#1f7a4d;--primary2:#e8f5ee;--text:#16202a;--sub:#667085;--line:#d0d5dd;--bg:#f6f7f8;--danger:#b42318;--warn:#b54708;--win:#1f7a4d;--lose:#b42318;--as:#667085;--accent:#175cd3;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;background:var(--bg);color:var(--text);font-size:16px;padding-bottom:90px;}
 header{background:var(--primary);color:#fff;padding:12px 14px;position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;}
 header .ttl{font-weight:800;font-size:17px;}
 header .mode{font-size:11px;background:rgba(255,255,255,.2);padding:3px 8px;border-radius:999px;}
 main{padding:12px;max-width:640px;margin:0 auto;}
-.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(16,24,40,.04);}
 h2{font-size:17px;margin:0 0 8px;}
 h3{font-size:14px;margin:12px 0 6px;color:var(--primary);border-left:4px solid var(--primary);padding-left:8px;}
 label{display:block;font-size:13px;font-weight:700;color:var(--sub);margin:10px 0 4px;}
 input[type=text],input[type=number],input[type=date],select{width:100%;padding:10px 12px;font-size:16px;border:1.5px solid var(--line);border-radius:10px;background:#fff;}
 .small{font-size:12px;color:var(--sub);}
-.btn{display:block;width:100%;padding:14px;font-size:17px;font-weight:800;border:none;border-radius:12px;background:var(--primary);color:#fff;margin-top:8px;cursor:pointer;}
+.btn{display:block;width:100%;min-height:52px;padding:13px 14px;font-size:16px;font-weight:800;border:none;border-radius:14px;background:var(--primary);color:#fff;margin-top:8px;cursor:pointer;}
 .btn.light{background:var(--primary2);color:var(--primary);border:1.5px solid var(--primary);}
 .btn.gray{background:#eef0f3;color:#344054;}
 .btn.danger{background:var(--danger);}
@@ -28,7 +28,9 @@ input[type=text],input[type=number],input[type=date],select{width:100%;padding:1
 .row>*{flex:1;}
 .grid{display:flex;flex-wrap:wrap;gap:7px;}
 .opt{min-width:56px;min-height:46px;padding:8px 12px;font-size:16px;font-weight:700;background:#fff;color:#344054;border:1.5px solid var(--line);border-radius:12px;cursor:pointer;}
+.opt{position:relative;}
 .opt.sel{background:var(--primary2);border-color:var(--primary);color:var(--primary);}
+.opt.sel::after{content:"\2713";position:absolute;top:-1px;right:4px;font-size:11px;color:var(--primary);}
 .opt.big{min-height:54px;font-size:20px;flex:1;}
 table{width:100%;border-collapse:collapse;font-size:14px;}
 th,td{border:1px solid #e4e7ec;padding:7px 5px;text-align:center;}
@@ -215,7 +217,7 @@ async function saveCourseEdit(){
 /* ============ ゲーム作成ウィザード（STEP1〜8） ============ */
 let wiz=null;
 function renderWizard(){
-  wiz={step:1,courseId:null,n:4,players:[],groupCount:1,scorers:{1:null,2:null},handicapEnabled:true,hcpMode:"hole",playDate:today()};
+  wiz={step:1,courseId:null,n:4,players:[],groupCount:1,scorers:{1:null,2:null},handicapEnabled:true,hcpMode:"hole",startSide:"out",playDate:today()};
   wizStep();
 }
 async function wizStep(){
@@ -228,6 +230,9 @@ async function wizStep(){
       ${list.length?list.map(c=>`<button class="opt ${wiz.courseId===c.courseId?"sel":""}" style="width:100%;text-align:left;margin-bottom:6px;" onclick="wiz.courseId='${c.courseId}';wizStep()">${esc(c.name)}<span class="small" style="float:right;">Par${c.holes.reduce((a,h)=>a+h.par,0)}</span></button>`).join(""):`<div class="small">登録済みコースがありません。</div>`}
       <button class="btn light sm" onclick="location.hash='#/course/new'">＋ 新しいコースを登録</button>
       <label>プレー日</label><input type="date" id="wDate" value="${wiz.playDate}" onchange="wiz.playDate=this.value">
+      ${(()=>{const cc=list.find(x=>x.courseId===wiz.courseId); if(!cc)return ""; const cn=cc.courseNames||["OUT","IN"];
+        return `<label>スタート</label><div class="grid">${[["out",0,"前半"],["in",1,"後半"]].map(([sd,i,lb])=>`<button class="opt big ${wiz.startSide===sd?"sel":""}" onclick="wiz.startSide='${sd}';wizStep()">${lb}（${esc(cn[i]||(i?"IN":"OUT"))}）から</button>`).join("")}</div>
+        <div class="small" style="margin-top:4px;">後半スタートを選ぶと、入力・スコア表・マッチ計算がプレー順（${esc(cn[1]||"IN")}→${esc(cn[0]||"OUT")}）になります。</div>`;})()}
       <button class="btn" ${wiz.courseId?"":"disabled"} onclick="wizNext()">次へ</button>`;
   }else if(s===2){
     body=`<h2>STEP2　参加人数</h2><div class="grid">${[2,3,4,5,6,7,8].map(n=>`<button class="opt big ${wiz.n===n?"sel":""}" onclick="wiz.n=${n};wizStep()">${n}人</button>`).join("")}</div>
@@ -262,16 +267,18 @@ async function wizStep(){
       <div class="grid" style="flex-direction:column;">
         <button class="${modeSel(true,"hole")}" onclick="wiz.handicapEnabled=true;wiz.hcpMode='hole';wizStep()">ハンデ戦（Hole HDCP順）</button>
         <button class="${modeSel(true,"random")}" onclick="wiz.handicapEnabled=true;wiz.hcpMode='random';wizStep()">🎲 ハンデ戦（ランダム配分）</button>
+        <button class="${modeSel(true,"randomPlayer")}" onclick="wiz.handicapEnabled=true;wiz.hcpMode='randomPlayer';wizStep()">🎲🎲 ハンデ戦（プレイヤー別ランダム）</button>
         <button class="${modeSel(false)}" onclick="wiz.handicapEnabled=false;wizStep()">スクラッチ戦</button>
       </div>
       <div class="small" style="margin-top:8px;">
         Hole HDCP順：対戦2人のハンデ差を、コースのHole HDCP順に1打ずつ配ります（差18超は全ホール＋α）。<br>
-        ランダム配分：ハンデをもらうホールの順位を、ゲーム作成時にランダムに決めます（コースの難易度と無関係になり、ギャンブル要素が加わります）。</div>
+        ランダム配分：ハンデをもらうホールの順位を、ゲーム作成時にランダムに決めます（全員共通・コースの難易度と無関係）。<br>
+        プレイヤー別ランダム：一人ひとり別々のランダム順位で自分のハンデを配ります。同じハンデ2でも付くホールが人によって違い、対戦は各自のネット同士で勝負します。</div>
       <button class="btn" onclick="wizNext()">次へ</button>`;
   }else if(s===7){
     const list=await Store.listCourses(); const c=list.find(x=>x.courseId===wiz.courseId);
     body=`<h2>STEP7　確認・ゲーム作成</h2>
-      <div><b>コース：</b>${esc(c.name)}　<b>日付：</b>${esc(wiz.playDate)}　<b>${wiz.handicapEnabled?(wiz.hcpMode==="random"?"ハンデ戦（ランダム配分）":"ハンデ戦（Hole HDCP順）"):"スクラッチ戦"}</b></div>
+      <div><b>コース：</b>${esc(c.name)}　<b>スタート：</b>${esc((c.courseNames||["OUT","IN"])[wiz.startSide==="in"?1:0])}　<b>日付：</b>${esc(wiz.playDate)}　<b>${wiz.handicapEnabled?(wiz.hcpMode==="random"?"ハンデ戦（ランダム配分）":wiz.hcpMode==="randomPlayer"?"ハンデ戦（プレイヤー別ランダム）":"ハンデ戦（Hole HDCP順）"):"スクラッチ戦"}</b></div>
       ${Array.from({length:wiz.groupCount},(_,k)=>k+1).map(g=>`<h3>${g}組（入力担当：${esc((wiz.players.find(p=>p.id===wiz.scorers[g])||{}).name)}）</h3>
         <div>${wiz.players.filter(p=>p.groupNo===g).map(p=>`${esc(p.name)}（HDCP ${p.handicap}）`).join("／")}</div>`).join("")}
       <div class="small" style="margin-top:8px;">総当たり ${wiz.n*(wiz.n-1)/2} マッチを自動計算します。</div>
@@ -304,8 +311,12 @@ async function wizCreate(){
   }
   const game={
     playDate:wiz.playDate, handicapEnabled:wiz.handicapEnabled, hcpMode:wiz.handicapEnabled?wiz.hcpMode:"none",
+    startSide:wiz.startSide, holeOrder:MatchCore.playOrder(wiz.startSide),
     course:{courseId:c.courseId,name:c.name,courseNames:c.courseNames,holes},
-    players:wiz.players.map((p,i)=>({id:p.id,name:p.name.trim(),groupNo:p.groupNo,handicap:p.handicap||0,displayOrder:i+1})),
+    players:wiz.players.map((p,i)=>{
+      const pl={id:p.id,name:p.name.trim(),groupNo:p.groupNo,handicap:p.handicap||0,displayOrder:i+1};
+      if(wiz.handicapEnabled&&wiz.hcpMode==="randomPlayer"){ const ord=MatchCore.randomHcpOrder(); pl.hcpRanks={}; ord.forEach((rank,k)=>{pl.hcpRanks[String(k+1)]=rank;}); }   // 各自専用の順位表
+      return pl; }),
     groups:Array.from({length:wiz.groupCount},(_,k)=>({groupNo:k+1,scorerPlayerId:wiz.scorers[k+1]})),
     scores:{}
   };
@@ -347,6 +358,7 @@ async function openGame(id,r){
   me=Store.Identity.get(id);
   if(role.kind==="scorer"&&!me){me=g.groups.find(x=>x.groupNo===role.groupNo).scorerPlayerId;Store.Identity.set(id,me);}
   inputGroup=role.kind==="scorer"?role.groupNo:1;
+  inputHole=MatchCore.playOrder(g.startSide||"out")[0]; inputVals={};
   unsub=Store.subscribeGame(id,game=>{ if(!game)return; G=game; if(!G.scores)G.scores={}; renderGame(); });
 }
 function canInput(){ return role.kind==="admin"||role.kind==="scorer"; }
@@ -361,7 +373,7 @@ function renderGame(){
   const mePl=G.players.find(p=>p.id===me);
   const head=`<div class="card" style="padding:10px 14px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <div><div style="font-weight:800;">${esc(G.course.name)}</div><div class="small">${esc(G.playDate)}　${G.handicapEnabled?(G.hcpMode==="random"?"🎲ハンデ戦(ランダム)":"ハンデ戦"):"スクラッチ戦"}　${G.players.length}人・${G.groups.length}組<span class="pill ${role.kind==="viewer"?"":"prim"}">${role.kind==="admin"?"管理者":role.kind==="scorer"?`${role.groupNo}組 入力担当`:"閲覧"}</span>${Store.mode==="firebase"?(G.__pending?` <span class="pill lose">未同期（送信待ち）</span>`:` <span class="pill win">同期済</span>`):""}</div></div>
+      <div><div style="font-weight:800;">${esc(G.course.name)}</div><div class="small">${esc(G.playDate)}　${hcpModeLabel(G)}　${G.players.length}人・${G.groups.length}組${G.startSide==="in"?`・${esc((G.course.courseNames||[])[1]||"IN")}スタート`:""} <span class="pill ${role.kind==="viewer"?"":"prim"}">${role.kind==="admin"?"管理者":role.kind==="scorer"?`${role.groupNo}組 入力担当`:"閲覧"}</span>${Store.mode==="firebase"?(G.__pending?` <span class="pill lose">未同期（送信待ち）</span>`:` <span class="pill win">同期済</span>`):""}</div></div>
       <button class="opt" style="min-height:40px;padding:6px 10px;font-size:13px;" onclick="askWho()">${mePl?esc(mePl.name):"あなたは？"}</button>
     </div></div>`;
   let body="";
@@ -370,7 +382,10 @@ function renderGame(){
   else if(tab==="rank")body=renderRank();
   else if(tab==="score")body=renderScoreTab();
   else if(tab==="input")body=renderInput();
+  const sy=window.scrollY;
   $("app").innerHTML=head+body;
+  window.scrollTo(0,sy);                                   // 再描画で先頭に戻らない
+  if(tab==="input"){const cur=document.querySelector("#holeStrip .cur");if(cur)cur.scrollIntoView({inline:"center",block:"nearest"});}
   if(!me&&!document.querySelector(".modal"))askWho();
 }
 function askWho(){
@@ -381,7 +396,13 @@ function askWho(){
   document.body.appendChild(m);
 }
 function chooseMe(pid){ me=pid; Store.Identity.set(gameId,pid); document.querySelectorAll(".modal").forEach(x=>x.remove()); renderGame(); }
-function allMatches(){ return MatchCore.calculateAllMatches(G.players,G.course.holes,G.scores,G.handicapEnabled); }
+function perPlayer(){ return G.hcpMode==="randomPlayer"; }
+function hcpModeLabel(g){ return !g.handicapEnabled?"スクラッチ戦":g.hcpMode==="random"?"🎲ハンデ戦(ランダム)":g.hcpMode==="randomPlayer"?"🎲🎲ハンデ戦(プレイヤー別ランダム)":"ハンデ戦"; }
+/* 個人ハンデ基準のこのホールの打数（プレイヤー別ランダムでは各自の順位表を使用） */
+function allowFor(p,h){ return MatchCore.personalAllowance(p.handicap,MatchCore.holeRankFor(p,h,perPlayer()),G.handicapEnabled); }
+function holeOrder(){ return (G.holeOrder&&G.holeOrder.length===18)?G.holeOrder:MatchCore.playOrder(G.startSide||"out"); }
+function orderedHoles(){ const by={}; G.course.holes.forEach(h=>{by[h.no]=h;}); return holeOrder().map(n=>by[n]).filter(Boolean); }
+function allMatches(){ return MatchCore.calculateAllMatches(G.players,G.course.holes,G.scores,G.handicapEnabled,holeOrder(),{perPlayer:perPlayer()}); }
 function resCls(m,pid){ if(m.up===0)return "as"; const lead=m.up>0?m.a.id:m.b.id; return lead===pid?"win":"lose"; }
 function matchCard(m,viewPid){
   const other=viewPid?(m.a.id===viewPid?m.b:m.a):null;
@@ -398,6 +419,12 @@ function matchCard(m,viewPid){
 function hcpExplain(m){
   const hA=m.a.handicap||0,hB=m.b.handicap||0;
   if(!G.handicapEnabled)return `<div class="small" style="margin-bottom:6px;"><b>スクラッチ戦</b>（${esc(m.a.name)} HDCP ${hA}／${esc(m.b.name)} HDCP ${hB}）：ハンデなし</div>`;
+  if(perPlayer()){
+    const list=p=>{const one=[],two=[];G.course.holes.forEach(h=>{const a=allowFor(p,h);if(a===1)one.push(h.no);if(a>=2)two.push(h.no+"H×"+a);});return `${one.length?one.join(",")+"H で1打":"なし"}${two.length?"／"+two.join(",")+"打":""}`;};
+    return `<div style="background:var(--primary2);border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:13px;">
+      🎲🎲 プレイヤー別ランダム：各自のハンデを自分専用の順位で配分し、ネット同士で勝負<br>
+      <b>${esc(m.a.name)}</b> HDCP ${hA}：${list(m.a)}<br><b>${esc(m.b.name)}</b> HDCP ${hB}：${list(m.b)}</div>`;
+  }
   const diff=Math.abs(hA-hB);
   let body;
   if(diff===0)body="ハンデ差0 → 両者ハンデなし";
@@ -459,7 +486,6 @@ function renderAll(){
     ${sel?matchCard(sel,null):""}`;
 }
 /* 個人ハンデ基準のこのホールの打数（表示・検算用。対戦ではハンデ差で計算する） */
-function personalAllowance(hcp,holeHcp){ return MatchCore.personalAllowance(hcp,holeHcp,G.handicapEnabled); }
 const fmtDiff=d=>d>0?`+${d}`:d===0?"±0":`${d}`;
 function renderRank(){
   const st=MatchCore.calculatePlayerStandings(G.players,allMatches());
@@ -470,15 +496,18 @@ function renderRank(){
 }
 let scoreMode="gross";   // ホール別の表示：gross＝グロス／net＝HDCP込み（ネット）
 function renderScoreTab(){
-  const hs=G.course.holes, ps=G.players.slice().sort((a,b)=>a.displayOrder-b.displayOrder);
-  const sum=ps.map(p=>({p,s:MatchCore.strokeSummary(p,hs,G.scores,G.handicapEnabled)}));
+  const hs=orderedHoles(), ps=G.players.slice().sort((a,b)=>a.displayOrder-b.displayOrder);
+  const sum=ps.map(p=>({p,s:MatchCore.strokeSummary(p,G.course.holes,G.scores,G.handicapEnabled,perPlayer())}));
   const net=scoreMode==="net"&&G.handicapEnabled;
-  const val=(p,h)=>{const v=(G.scores[p.id]||{})[h.no];if(v==null)return null;return net?v-personalAllowance(p.handicap,h.hcp):v;};
+  const cn=G.course.courseNames||["OUT","IN"], inFirst=G.startSide==="in";
+  const halfHead=inFirst?`<th>${esc(cn[1]||"IN")}</th><th>${esc(cn[0]||"OUT")}</th>`:`<th>${esc(cn[0]||"OUT")}</th><th>${esc(cn[1]||"IN")}</th>`;
+  const halfCells=s=>inFirst?`<td>${s.in||"-"}</td><td>${s.out||"-"}</td>`:`<td>${s.out||"-"}</td><td>${s.in||"-"}</td>`;
+  const val=(p,h)=>{const v=(G.scores[p.id]||{})[h.no];if(v==null)return null;return net?v-allowFor(p,h):v;};
   const cellCls=(p,h)=>{const v=val(p,h);if(v==null)return "u";const d=v-h.par;return d<=-1?"bird":d===1?"bogey":d>=2?"dbl":"";};
   const pm=d=>`<span class="small" style="color:${d>0?"var(--lose)":d<0?"var(--win)":"var(--sub)"};font-weight:800;">${fmtDiff(d)}</span>`;
   return `<div class="card"><h2>ストロークスコア</h2>
-    <table><tr><th>Player</th><th>OUT</th><th>IN</th><th>TOTAL</th><th>±</th>${G.handicapEnabled?`<th>HDCP</th><th>NET</th><th>Net±</th>`:""}</tr>
-    ${sum.map(({p,s})=>`<tr><td class="l">${esc(p.name)}</td><td>${s.out||"-"}</td><td>${s.in||"-"}</td>
+    <table><tr><th>Player</th>${halfHead}<th>TOTAL</th><th>±</th>${G.handicapEnabled?`<th>HDCP</th><th>NET</th><th>Net±</th>`:""}</tr>
+    ${sum.map(({p,s})=>`<tr><td class="l">${esc(p.name)}</td>${halfCells(s)}
       <td style="font-weight:800;">${s.played?s.gross:"-"}${s.played&&s.played<18?`<span class="small">(${s.played}H)</span>`:""}</td><td>${s.played?pm(s.diff):"-"}</td>
       ${G.handicapEnabled?`<td>${p.handicap}</td><td style="font-weight:800;">${s.played?s.net:"-"}</td><td>${s.played?pm(s.netDiff):"-"}</td>`:""}</tr>`).join("")}</table>
     <div class="small" style="margin-top:4px;">±＝プレー済みホールのPar合計との差${G.handicapEnabled?"。NET＝グロス − 個人ハンデのホール配分（Hole HDCP順に1打ずつ）":""}</div>
@@ -489,7 +518,17 @@ function renderScoreTab(){
       ${net?`<tr><th>HDCP</th>${hs.map(h=>`<td class="small">${h.hcp}</td>`).join("")}<td></td><td></td></tr>`:""}
       ${sum.map(({p,s})=>`<tr><td class="l" style="white-space:nowrap;">${esc(p.name)}</td>${hs.map(h=>{const v=val(p,h);return `<td class="${cellCls(p,h)}">${v==null?"·":`${v}<div class="pm">${fmtDiff(v-h.par)}</div>`}</td>`;}).join("")}
         <td style="font-weight:800;">${s.played?(net?s.net:s.gross):"-"}</td><td>${s.played?pm(net?s.netDiff:s.diff):"-"}</td></tr>`).join("")}</table></div>
-    <div class="small">緑＝バーディー以下　橙＝ボギー　赤＝ダブルボギー以上${net?"（HDCP込みのネットで判定）":""}</div></div>`;
+    <div class="small">緑＝バーディー以下　橙＝ボギー　赤＝ダブルボギー以上${net?"（HDCP込みのネットで判定）":""}</div></div>
+    ${G.handicapEnabled?renderHcpTable(hs,ps):""}`;
+}
+/* どのホールに誰のハンデが付くかの一覧（個人ハンデ配分。プレイヤー別ランダムでは各自の順位表） */
+function renderHcpTable(hs,ps){
+  const tot=p=>hs.reduce((a,h)=>a+allowFor(p,h),0);
+  return `<div class="card"><h2>ハンデ配分表</h2>
+    <div class="small">${perPlayer()?"🎲🎲 プレイヤー別ランダム：数字はそのホールでもらう打数（各自別々の順位）":G.hcpMode==="random"?"🎲 ランダム配分：HDCP列はこのゲーム用にシャッフルした順位":"Hole HDCP順に個人ハンデを配分"}。${perPlayer()?"対戦は各自のネット同士で勝負します。":"対戦は2人のハンデ差で計算します。"}</div>
+    <div class="wide" style="margin-top:6px;"><table class="scoreGrid"><tr><th>H</th><th>Par</th><th>HDCP</th>${ps.map(p=>`<th>${esc(p.name)}<br><span class="small">${p.handicap}</span></th>`).join("")}</tr>
+      ${hs.map(h=>`<tr><td class="l">${h.no}</td><td>${h.par}</td><td class="small">${h.hcp}</td>${ps.map(p=>{const a=allowFor(p,h);return `<td style="${a?"background:var(--primary2);color:var(--primary);font-weight:800;":"color:#c7cdd6;"}">${a||"·"}</td>`;}).join("")}</tr>`).join("")}
+      <tr style="font-weight:800;background:#f2f4f7;"><td class="l" colspan="3">合計</td>${ps.map(p=>`<td>${tot(p)}</td>`).join("")}</tr></table></div></div>`;
 }
 /* ---- スコア入力（§16〜18） ---- */
 function groupPlayers(g){ return G.players.filter(p=>p.groupNo===g).sort((a,b)=>a.displayOrder-b.displayOrder); }
@@ -504,35 +543,37 @@ function renderInput(){
   const h=G.course.holes.find(x=>x.no===inputHole);
   const ps=groupPlayers(inputGroup);
   if(!ps.some(p=>p.id in inputVals))initInputVals();
-  const strip=G.course.holes.map(x=>`<button class="${x.no===inputHole?"cur":""} ${holeEntered(inputGroup,x.no)?"has":""}" onclick="inputHole=${x.no};initInputVals();renderGame()">${x.no}H</button>`).join("");
+  const order=holeOrder(), oi=order.indexOf(inputHole), prevH=oi>0?order[oi-1]:null, nextH=oi<17?order[oi+1]:null;
+  const strip=orderedHoles().map(x=>`<button class="${x.no===inputHole?"cur":""} ${holeEntered(inputGroup,x.no)?"has":""}" onclick="inputHole=${x.no};initInputVals();renderGame()">${x.no}H</button>`).join("");
   return `<div class="card">
     ${role.kind==="admin"&&G.groups.length>1?`<div class="grid" style="margin-bottom:8px;">${G.groups.map(gr=>`<button class="opt ${inputGroup===gr.groupNo?"sel":""}" onclick="inputGroup=${gr.groupNo};initInputVals();renderGame()">${gr.groupNo}組</button>`).join("")}</div>`:""}
     <div class="hs" id="holeStrip">${strip}</div>
     <div style="display:flex;justify-content:space-between;align-items:baseline;"><h2 style="margin:0;">${inputGroup}組　${h.no}H <span style="font-size:14px;color:var(--sub);">Par${h.par} / HDCP ${h.hcp}</span></h2><span class="pill ${holeEntered(inputGroup,h.no)?"win":""}">${holeEntered(inputGroup,h.no)?"入力済":"未入力"}</span></div>
     <table style="margin-top:6px;"><tr><th style="text-align:left;">Player</th><th>HDCP</th>${G.handicapEnabled?`<th>このホール</th><th>Net</th>`:""}<th>スコア</th></tr>
-    ${ps.map(p=>{const saved=(G.scores[p.id]||{})[h.no];const al=personalAllowance(p.handicap,h.hcp);return `<tr>
+    ${ps.map(p=>{const saved=(G.scores[p.id]||{})[h.no];const al=allowFor(p,h);return `<tr>
       <td class="l" style="font-size:17px;">${esc(p.name)}<div class="flag ${saved!=null?"ok":""}" style="text-align:left;">${saved!=null?"登録済":"未入力"}</div></td>
       <td style="font-size:18px;font-weight:800;">${p.handicap}</td>
       ${G.handicapEnabled?`<td style="font-size:18px;font-weight:800;color:var(--warn);">${al}</td><td style="font-size:18px;font-weight:800;color:var(--primary);" id="n_${p.id}">${inputVals[p.id]-al}</td>`:""}
       <td><div class="st" style="justify-content:center;"><button onclick="adjVal('${p.id}',-1)">−</button><span class="v" id="v_${p.id}">${inputVals[p.id]}</span><button onclick="adjVal('${p.id}',1)">＋</button></div></td></tr>`;}).join("")}</table>
     <div class="small" style="margin-top:6px;">初期値はPar${h.par}です。「登録」を押した打数だけが保存されます（押すまでは未入力扱い）。${G.handicapEnabled?"「このホール」は個人ハンデでこのホールにもらう打数、Netはそれを引いた値（参考値）。対戦の勝敗は2人のハンデ差で計算します。":""}</div>
     <div class="row" style="margin-top:10px;">
-      <button class="btn gray" ${inputHole<=1?"disabled":""} onclick="inputHole--;initInputVals();renderGame()">${inputHole-1}Hへ</button>
+      <button class="btn gray" ${prevH?"":"disabled"} onclick="inputHole=${prevH};initInputVals();renderGame()">${prevH?prevH+"Hへ":"−"}</button>
       <button class="btn" style="flex:1.6;" onclick="registerHole()">登録</button>
-      <button class="btn gray" ${inputHole>=18?"disabled":""} onclick="inputHole++;initInputVals();renderGame()">${inputHole+1}Hへ</button>
+      <button class="btn gray" ${nextH?"":"disabled"} onclick="inputHole=${nextH};initInputVals();renderGame()">${nextH?nextH+"Hへ":"−"}</button>
     </div></div>`;
 }
 function adjVal(pid,d){
   inputVals[pid]=Math.max(1,Math.min(20,(inputVals[pid]||0)+d));
   const el=$("v_"+pid); if(el)el.textContent=inputVals[pid];
-  const n=$("n_"+pid); if(n){const p=G.players.find(x=>x.id===pid),h=G.course.holes.find(x=>x.no===inputHole);n.textContent=inputVals[pid]-personalAllowance(p.handicap,h.hcp);}
+  const n=$("n_"+pid); if(n){const p=G.players.find(x=>x.id===pid),h=G.course.holes.find(x=>x.no===inputHole);n.textContent=inputVals[pid]-allowFor(p,h);}
 }
 async function registerHole(){
   const ps=groupPlayers(inputGroup), hole=inputHole;
   try{ await Store.setScores(gameId,ps.map(p=>({playerId:p.id,holeNo:hole,gross:inputVals[p.id],groupNo:inputGroup}))); }
   catch(e){ toast("登録できません："+(e.code==="permission-denied"?"権限がありません（URLのトークンを確認）":e.message)); return; }
   toast(`${hole}H を登録しました`);
-  if(hole<18){ inputHole=hole+1; initInputVals(); }
+  const ord=holeOrder(), ni=ord.indexOf(hole)+1;
+  if(ni<18){ inputHole=ord[ni]; initInputVals(); }   // プレー順で次のホールへ
   renderGame();
   const cur=document.querySelector("#holeStrip .cur"); if(cur)cur.scrollIntoView({inline:"center",block:"nearest"});
 }

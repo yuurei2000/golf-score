@@ -115,6 +115,30 @@ eq("HDCP重複を検出", C.validateCourse({name:"X",holes:bad})[0].includes("�
 const bad2=JSON.parse(JSON.stringify(holes)); bad2[5].par=7;
 eq("Par範囲外を検出", C.validateCourse({name:"X",holes:bad2}).some(e=>e.includes("Par")),true);
 
+/* INスタート：プレー順 10→18→1→9 で採点し、残りホールもプレー順で数える */
+eq("playOrder(in)", C.playOrder("in").slice(0,3).concat(C.playOrder("in").slice(-2)),[10,11,12,8,9]);
+const sIn={a:{},b:{}}; [10,11,12,13,14,15,16].forEach(h=>{sIn.a[h]=4;sIn.b[h]=5;});   // 10〜16Hでa7連勝（7ホール消化・残り11）
+m=C.calculateMatchStatus(A,B,holes,sIn,false,C.playOrder("in"));
+eq("INスタート 7H消化 7UP（残り11なので未成立）", [m.thru,m.up,m.closed],[7,7,false]);
+[17,18,1,2,3,4,5,6,7].forEach(h=>{sIn.a[h]=4;sIn.b[h]=4;});                         // 以降AS。12ホール消化（3Hまで）で残り6 → 7UP成立 7&6
+m=C.calculateMatchStatus(A,B,holes,sIn,false,C.playOrder("in"));
+eq("INスタート 12H消化（10→18,1→3）で成立 7&6", [m.thru,m.closed,m.label,m.holes[m.holes.length-1].no],[12,true,"7&6",3]);
+eq("詳細はプレー順（先頭10H）", m.holes[0].no,10);
+// OUTスタート（順序なし）の従来結果は変わらない
+m=C.calculateMatchStatus(A,B,holes,s2,false);
+eq("OUTスタートは従来どおり 3&2", m.label,"3&2");
+/* プレイヤー別ランダム：各自の順位表でハンデを配り、ネット同士で勝負 */
+const rk=order=>{const m={};order.forEach((rank,i)=>{m[i+1]=rank;});return m;};   // holeNo→順位
+const PA={id:"pa",name:"PA",handicap:2,displayOrder:1,hcpRanks:rk([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18])}; // 1H,2Hで1打
+const PB={id:"pb",name:"PB",handicap:2,displayOrder:2,hcpRanks:rk([18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1])}; // 18H,17Hで1打
+eq("同じHDCP2でも付くホールが違う（PA:1H）", C.matchAllowance(PA,PB,holes[0],true,true),{a:1,b:0});
+eq("同じHDCP2でも付くホールが違う（PB:18H）", C.matchAllowance(PA,PB,holes[17],true,true),{a:0,b:1});
+eq("通常モードなら差0でハンデなし", C.matchAllowance(PA,PB,holes[0],true,false),{a:0,b:0});
+const sPP={pa:{1:4,18:4},pb:{1:4,18:4}};
+m=C.calculateMatchStatus(PA,PB,holes,sPP,true,null,{perPlayer:true});
+eq("プレイヤー別：1HはPA勝ち・18HはPB勝ち → AS", [m.holes[0].result,m.holes[1].result,m.up],["A","B",0]);
+eq("strokeSummary もプレイヤー別順位で配分", C.strokeSummary(PB,holes,sPP,true,true).allow,1);
+eq("holeRankFor：順位表なしはコースHDCP", C.holeRankFor({},holes[0],true),holes[0].hcp);
 out.insertAdjacentHTML("afterbegin",`<h3 class="${fail?"ng":"ok"}">結果：${pass} 件成功 / ${fail} 件失敗</h3>`);
 window.__testResult={pass,fail};
 </script>
