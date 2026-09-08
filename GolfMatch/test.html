@@ -58,7 +58,7 @@ eq("3&2で成立", [m.closed,m.finished,m.label,C.matchLabel(m)],[true,true,"3&2
 // 成立後に17H,18Hを入力しても結果は変わらない
 s2.a[17]=6;s2.b[17]=3;s2.a[18]=6;s2.b[18]=3;
 m=C.calculateMatchStatus(A,B,holes,s2,false);
-eq("成立後のホールは採点しない", [m.up,m.thru,m.label],[3,16,"3&2"]);
+eq("成立後も採点は続くが勝敗は成立時点（3&2）", [m.up,m.thru,m.label,m.holes.length,m.upAll,m.thruAll],[3,16,"3&2",18,1,18]);
 /* 18H終了 1UP */
 const s3={a:{},b:{}};for(let h=1;h<=18;h++){s3.a[h]=4;s3.b[h]=(h===18)?5:4;}
 m=C.calculateMatchStatus(A,B,holes,s3,false);
@@ -105,6 +105,8 @@ eq("スクラッチは0", C.personalAllowance(16,1,false),0);
 /* ランダム配分：1〜18の順列 */
 const ro=C.randomHcpOrder();
 eq("ランダム配分は1〜18の順列", ro.slice().sort((a,b)=>a-b),Array.from({length:18},(_,i)=>i+1));
+const fr9=ro.slice(0,9);
+eq("ランダム配分は前半・後半に交互（前半の順位≤2kがk個）", [2,4,6,8,10,12,14,16,18].map(n=>fr9.filter(x=>x<=n).length),[1,2,3,4,5,6,7,8,9]);
 const ro2=C.randomHcpOrder(()=>0.5);
 eq("同じ乱数なら同じ結果（再現性）", C.randomHcpOrder(()=>0.5),ro2);
 
@@ -122,7 +124,7 @@ m=C.calculateMatchStatus(A,B,holes,sIn,false,C.playOrder("in"));
 eq("INスタート 7H消化 7UP（残り11なので未成立）", [m.thru,m.up,m.closed],[7,7,false]);
 [17,18,1,2,3,4,5,6,7].forEach(h=>{sIn.a[h]=4;sIn.b[h]=4;});                         // 以降AS。12ホール消化（3Hまで）で残り6 → 7UP成立 7&6
 m=C.calculateMatchStatus(A,B,holes,sIn,false,C.playOrder("in"));
-eq("INスタート 12H消化（10→18,1→3）で成立 7&6", [m.thru,m.closed,m.label,m.holes[m.holes.length-1].no],[12,true,"7&6",3]);
+eq("INスタート 12H消化（10→18,1→3）で成立 7&6", [m.thru,m.closed,m.label,m.holes[m.thru-1].no],[12,true,"7&6",3]);
 eq("詳細はプレー順（先頭10H）", m.holes[0].no,10);
 // OUTスタート（順序なし）の従来結果は変わらない
 m=C.calculateMatchStatus(A,B,holes,s2,false);

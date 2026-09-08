@@ -374,7 +374,11 @@ function renderGame(){
   const head=`<div class="card" style="padding:10px 14px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div><div style="font-weight:800;">${esc(G.course.name)}</div><div class="small">${esc(G.playDate)}　${hcpModeLabel(G)}　${G.players.length}人・${G.groups.length}組${G.startSide==="in"?`・${esc((G.course.courseNames||[])[1]||"IN")}スタート`:""} <span class="pill ${role.kind==="viewer"?"":"prim"}">${role.kind==="admin"?"管理者":role.kind==="scorer"?`${role.groupNo}組 入力担当`:"閲覧"}</span>${Store.mode==="firebase"?(G.__pending?` <span class="pill lose">未同期（送信待ち）</span>`:` <span class="pill win">同期済</span>`):""}</div></div>
-      <button class="opt" style="min-height:40px;padding:6px 10px;font-size:13px;" onclick="askWho()">${mePl?esc(mePl.name):"あなたは？"}</button>
+      <div style="display:flex;gap:6px;flex:0 0 auto;">
+        <button class="opt" style="min-height:40px;padding:6px 10px;font-size:13px;" onclick="askWho()">${mePl?esc(mePl.name):"あなたは？"}</button>
+        <button class="opt" style="min-height:40px;min-width:40px;padding:6px 8px;font-size:13px;" onclick="showQr()" title="参加QR">QR</button>
+        <button class="opt" style="min-height:40px;min-width:40px;padding:6px 8px;font-size:16px;" onclick="leaveGame()" title="ホームへ">⌂</button>
+      </div>
     </div></div>`;
   let body="";
   if(tab==="my")body=renderMy(mePl);
@@ -441,7 +445,7 @@ function hcpExplain(m){
 }
 function matchDetail(m){
   if(!m.holes.length)return hcpExplain(m)+`<div class="small">両者が入力済みのホールがまだありません。</div>`;
-  return hcpExplain(m)+`<div class="wide"><table><tr><th>H</th><th>Par</th><th>HDCP</th><th>${esc(m.a.name)}<br><span class="small">HDCP ${m.a.handicap||0}</span></th><th>${esc(m.b.name)}<br><span class="small">HDCP ${m.b.handicap||0}</span></th><th>勝者</th><th>状況</th></tr>
+  return hcpExplain(m)+(m.closed?`<div class="small" style="margin-bottom:4px;">✔ ${m.thru}H時点で成立（${esc(MatchCore.matchLabel(m))}）。以降のホールも参考として採点しています（最終まで通算 ${fmtDiff(m.upAll)}）。</div>`:"")+`<div class="wide"><table><tr><th>H</th><th>Par</th><th>HDCP</th><th>${esc(m.a.name)}<br><span class="small">HDCP ${m.a.handicap||0}</span></th><th>${esc(m.b.name)}<br><span class="small">HDCP ${m.b.handicap||0}</span></th><th>勝者</th><th>状況</th></tr>
     ${m.holes.map(h=>`<tr><td>${h.no}</td><td>${h.par}</td><td>${h.hcp}</td>
       <td>${h.grossA}${h.allowA?`<span class="small"> (-${h.allowA})→${h.netA}</span>`:""}</td>
       <td>${h.grossB}${h.allowB?`<span class="small"> (-${h.allowB})→${h.netB}</span>`:""}</td>
@@ -451,14 +455,29 @@ function matchDetail(m){
 }
 function renderMy(mePl){
   if(!mePl)return `<div class="card"><div class="small">右上の「あなたは？」から自分の名前を選んでください。</div></div>`;
-  const ms=allMatches().filter(m=>m.a.id===me||m.b.id===me);
-  const st=MatchCore.calculatePlayerStandings(G.players,allMatches());
-  const row=st.rows.find(r=>r.player.id===me);
-  return `<div class="card" style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+  const all=allMatches(), ms=all.filter(m=>m.a.id===me||m.b.id===me);
+  const st=MatchCore.calculatePlayerStandings(G.players,all), row=st.rows.find(r=>r.player.id===me);
+  const ss=MatchCore.strokeSummary(mePl,G.course.holes,G.scores,G.handicapEnabled,perPlayer());
+  const nh=nextHoleInfo(mePl);
+  const sel=openMatch?ms.find(m=>`${m.a.id}-${m.b.id}`===openMatch):null;
+  const ps=G.players.slice().sort((a,b)=>a.displayOrder-b.displayOrder);
+  return `<div class="card" style="padding:10px 14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
       <div><span class="small">${st.provisional?"暫定":"最終"}順位</span><div style="font-size:26px;font-weight:900;">${row.rank}位 <span style="font-size:14px;color:var(--sub);">/ ${G.players.length}人</span></div></div>
-      <div style="text-align:right;"><span class="pill win">${row.w}勝</span> <span class="pill as">${row.d}分</span> <span class="pill lose">${row.l}敗</span><div class="small">UP/DOWN合計 ${row.upSum>0?"+":""}${row.upSum}</div></div></div>
+      <div style="text-align:right;"><span class="pill win">${row.w}勝</span> <span class="pill as">${row.d}分</span> <span class="pill lose">${row.l}敗</span><div class="small">UP/DOWN合計 ${fmtDiff(row.upSum)}</div></div></div>
+    <table style="margin-top:8px;"><tr><th>ホール</th><th>TOTAL</th><th>±</th>${G.handicapEnabled?`<th>NET</th><th>±</th>`:""}</tr>
+      <tr><td style="font-weight:800;">${ss.played}H</td><td style="font-weight:800;font-size:16px;">${ss.played?ss.gross:"-"}</td><td>${ss.played?pmTxt(ss.diff):"-"}</td>${G.handicapEnabled?`<td style="font-weight:800;font-size:16px;">${ss.played?ss.net:"-"}</td><td>${ss.played?pmTxt(ss.netDiff):"-"}</td>`:""}</tr></table></div>
+    ${nh?`<div class="card" style="padding:10px 14px;background:#fffaeb;border-color:#f9dbaf;"><b>次のホール：${nh.h.no}H</b> <span class="small">Par${nh.h.par} / HDCP ${nh.h.hcp}</span>
+      <div class="small" style="margin-top:4px;line-height:1.7;">${nh.lines.join("<br>")}</div></div>`:""}
     <h3>${esc(mePl.name)}のMATCH（タップで詳細）</h3>
-    ${ms.map(m=>matchCard(m,me)).join("")}`;
+    <div class="card" style="padding:6px 10px;"><table><tr><th style="text-align:left;">相手</th><th>状況</th><th>H</th></tr>
+      ${ms.map(m=>{const o=m.a.id===me?m.b:m.a, upMe=m.a.id===me?m.up:-m.up, key=`${m.a.id}-${m.b.id}`;
+        return `<tr onclick="openMatch=openMatch==='${key}'?null:'${key}';renderGame()" style="cursor:pointer;${openMatch===key?"background:var(--primary2);":""}">
+          <td class="l" style="font-size:16px;">${esc(o.name)}<span class="small"> ${o.handicap}</span></td>
+          <td style="font-size:18px;">${upIcons(upMe,m)}</td>
+          <td class="small">${m.thru?m.thru+"H":"-"}${m.finished?"<br>✔":""}</td></tr>`;}).join("")}</table></div>
+    ${sel?matchCard(sel,me):""}
+    ${G.handicapEnabled?renderHcpTable(orderedHoles(),ps,nh?nh.h.no:null):""}`;
 }
 /* 全マッチ：縦横に名前を並べた対戦表（行のプレイヤーから見た状況）。セルをタップで詳細表示 */
 function renderAll(){
@@ -469,16 +488,11 @@ function renderAll(){
     if(r.id===c.id)return `<td style="background:#f2f4f7;"></td>`;
     const m=find(r,c); const key=`${m.a.id}-${m.b.id}`;
     const upR=(m.a.id===r.id)?m.up:-m.up;          // 行プレイヤー視点
-    let txt,cls;
-    if(!m.thru){txt="-";cls="";}
-    else if(upR===0){txt=m.finished?"AS":"AS";cls="as";}
-    else if(upR>0){txt=m.label;cls="win";}          // 例：2UP / 3&2
-    else {txt=m.finished?m.label:`${-upR}DN`;cls="lose";}
-    return `<td onclick="openMatch=openMatch==='${key}'?null:'${key}';renderGame()" style="cursor:pointer;font-weight:800;${openMatch===key?"outline:2px solid var(--primary);":""}${cls==="win"?"color:var(--win);":cls==="lose"?"color:var(--lose);":"color:var(--as);"}">${esc(txt)}${m.finished&&upR!==0?"<span class='small'>✔</span>":""}</td>`;
+    return `<td onclick="openMatch=openMatch==='${key}'?null:'${key}';renderGame()" style="cursor:pointer;white-space:nowrap;${openMatch===key?"outline:2px solid var(--primary);":""}">${upIcons(upR,m)}</td>`;
   };
   const sel=openMatch?ms.find(m=>`${m.a.id}-${m.b.id}`===openMatch):null;
   return `<div class="card"><h2>全MATCH（${ms.length}マッチ）</h2>
-    <div class="small">行の人から見た状況（緑＝リード／赤＝ビハインド）。セルをタップで詳細。</div>
+    <div class="small">行の人から見た状況（▲＝UP／▼＝DOWN／－＝AS）。セルをタップで詳細。</div>
     <div class="wide" style="margin-top:6px;"><table style="font-size:12px;">
       <tr><th style="position:sticky;left:0;background:#f2f4f7;"></th>${ps.map(p=>`<th>${esc(p.name)}</th>`).join("")}</tr>
       ${ps.map(r=>`<tr><th style="position:sticky;left:0;background:#f2f4f7;white-space:nowrap;text-align:left;">${esc(r.name)}</th>${ps.map(c=>cell(r,c)).join("")}</tr>`).join("")}
@@ -487,6 +501,47 @@ function renderAll(){
 }
 /* 個人ハンデ基準のこのホールの打数（表示・検算用。対戦ではハンデ差で計算する） */
 const fmtDiff=d=>d>0?`+${d}`:d===0?"±0":`${d}`;
+const pmTxt=d=>`<span style="color:${d>0?"var(--lose)":d<0?"var(--win)":"var(--sub)"};font-weight:800;">${fmtDiff(d)}</span>`;
+/* UP/DOWN をアイコンで表示（▲=UP ▼=DOWN、AS は －）。成立済みは 3&2 などのラベルを添える */
+function upIcons(up,m){
+  if(!m.thru)return `<span style="color:#c7cdd6;">－</span>`;
+  if(up===0)return `<span style="color:var(--as);font-weight:800;">－ AS</span>`;
+  const n=Math.abs(up), ic=(up>0?"▲":"▼").repeat(Math.min(n,9)), col=up>0?"var(--win)":"var(--lose)";
+  return `<span style="color:${col};font-weight:900;letter-spacing:1px;">${ic}</span><span style="color:${col};font-size:12px;font-weight:800;"> ${m.finished?m.label:n+(up>0?"UP":"DN")}</span>`;
+}
+/* 自分の組で次に入力するホールと、そのホールで各相手との間に付くハンデ */
+function nextHoleInfo(mePl){
+  const order=holeOrder(), grp=mePl.groupNo;
+  let last=-1; order.forEach((n,i)=>{ if(holeEntered(grp,n)) last=i; });
+  if(last>=17)return null;
+  const h=G.course.holes.find(x=>x.no===order[last+1]); if(!h)return null;
+  const lines=[];
+  if(G.handicapEnabled){
+    G.players.filter(p=>p.id!==me).sort((a,b)=>a.displayOrder-b.displayOrder).forEach(p=>{
+      const al=MatchCore.matchAllowance(mePl,p,h,true,perPlayer());
+      const t=(!al.a&&!al.b)?"なし":[al.a?`${esc(mePl.name)} +${al.a}打`:"",al.b?`${esc(p.name)} +${al.b}打`:""].filter(Boolean).join("／");
+      lines.push(`vs ${esc(p.name)}：<b>${t}</b>`);
+    });
+  } else lines.push("スクラッチ戦（ハンデなし）");
+  return {h,lines};
+}
+/* 途中参加用QR・URL表示 */
+function showQr(){
+  const vUrl=`${baseUrl()}#/g/${gameId}`;
+  const links=[["参加者用（閲覧）",vUrl]];
+  if(role.kind==="admin"){
+    G.groups.forEach(gr=>{ if(gr.scorerToken)links.push([`${gr.groupNo}組 入力担当者用`,`${baseUrl()}#/g/${gameId}/s/${gr.groupNo}/${gr.scorerToken}`]); });
+    if(G.adminToken)links.push(["管理者用",`${baseUrl()}#/g/${gameId}/a/${G.adminToken}`]);
+  }
+  const m=document.createElement("div"); m.className="modal";
+  m.innerHTML=`<div class="box"><h2>参加用QRコード</h2><div class="small">途中参加のメンバーはこのQRを読み取り、「あなたは誰ですか？」で自分の名前を選んでください。</div>
+    <div id="qr2" style="display:flex;justify-content:center;margin:12px 0;"></div>
+    ${links.map(([l,u])=>`<label>${l}</label><div class="url">${esc(u)}</div>`).join("")}
+    <button class="btn gray sm" onclick="this.closest('.modal').remove()">閉じる</button></div>`;
+  document.body.appendChild(m);
+  try{ new QRCode(m.querySelector("#qr2"),{text:vUrl,width:200,height:200}); }catch(_){ m.querySelector("#qr2").innerHTML=`<div class="small">QR生成不可（オフライン）</div>`; }
+}
+function leaveGame(){ if(confirm("ゲーム画面を閉じてホームに戻りますか？\n（データは保存されています。URLやホームの一覧から再度開けます）"))location.hash="#/"; }
 function renderRank(){
   const st=MatchCore.calculatePlayerStandings(G.players,allMatches());
   return `<div class="card"><h2>${st.provisional?"暫定順位":"最終順位"}</h2>
@@ -513,21 +568,26 @@ function renderScoreTab(){
     <div class="small" style="margin-top:4px;">±＝プレー済みホールのPar合計との差${G.handicapEnabled?"。NET＝グロス − 個人ハンデのホール配分（Hole HDCP順に1打ずつ）":""}</div>
     <h3>ホール別</h3>
     ${G.handicapEnabled?`<div class="grid" style="margin-bottom:6px;"><button class="opt ${!net?"sel":""}" onclick="scoreMode='gross';renderGame()">グロス（TOTAL ±）</button><button class="opt ${net?"sel":""}" onclick="scoreMode='net';renderGame()">HDCP込み（NET ±）</button></div>`:""}
-    <div class="wide"><table class="scoreGrid"><tr><th>H</th>${hs.map(h=>`<th>${h.no}</th>`).join("")}<th>${net?"NET":"TOTAL"}</th><th>±</th></tr>
-      <tr><th>Par</th>${hs.map(h=>`<td>${h.par}</td>`).join("")}<td style="font-weight:800;">${hs.reduce((a,h)=>a+h.par,0)}</td><td></td></tr>
-      ${net?`<tr><th>HDCP</th>${hs.map(h=>`<td class="small">${h.hcp}</td>`).join("")}<td></td><td></td></tr>`:""}
-      ${sum.map(({p,s})=>`<tr><td class="l" style="white-space:nowrap;">${esc(p.name)}</td>${hs.map(h=>{const v=val(p,h);return `<td class="${cellCls(p,h)}">${v==null?"·":`${v}<div class="pm">${fmtDiff(v-h.par)}</div>`}</td>`;}).join("")}
-        <td style="font-weight:800;">${s.played?(net?s.net:s.gross):"-"}</td><td>${s.played?pm(net?s.netDiff:s.diff):"-"}</td></tr>`).join("")}</table></div>
+    ${(()=>{ // 前半・後半（プレー順）ごとに小計列を入れる
+      const segs=[hs.slice(0,9),hs.slice(9)];
+      const segLabel=k=>((k===0)?(inFirst?cn[1]:cn[0]):(inFirst?cn[0]:cn[1]))||(k===0?"前半":"後半");
+      const subTh=k=>`<th style="background:#e8f5ee;">${esc(segLabel(k))}計</th>`;
+      const subCell=(p,sg)=>{let t=0,n=0;sg.forEach(h=>{const v=val(p,h);if(v!=null){t+=v;n++;}});return `<td style="font-weight:800;background:#f2f4f7;">${n?t:"·"}</td>`;};
+      return `<div class="wide"><table class="scoreGrid"><tr><th>H</th>${segs.map((sg,k)=>sg.map(h=>`<th>${h.no}</th>`).join("")+subTh(k)).join("")}<th>${net?"NET":"TOTAL"}</th><th>±</th></tr>
+      <tr><th>Par</th>${segs.map(sg=>sg.map(h=>`<td>${h.par}</td>`).join("")+`<td style="font-weight:800;background:#f2f4f7;">${sg.reduce((a,h)=>a+h.par,0)}</td>`).join("")}<td style="font-weight:800;">${hs.reduce((a,h)=>a+h.par,0)}</td><td></td></tr>
+      ${net?`<tr><th>HDCP</th>${segs.map(sg=>sg.map(h=>`<td class="small">${h.hcp}</td>`).join("")+`<td style="background:#f2f4f7;"></td>`).join("")}<td></td><td></td></tr>`:""}
+      ${sum.map(({p,s})=>`<tr><td class="l" style="white-space:nowrap;">${esc(p.name)}</td>${segs.map(sg=>sg.map(h=>{const v=val(p,h);return `<td class="${cellCls(p,h)}">${v==null?"·":`${v}<div class="pm">${fmtDiff(v-h.par)}</div>`}</td>`;}).join("")+subCell(p,sg)).join("")}
+        <td style="font-weight:800;">${s.played?(net?s.net:s.gross):"-"}</td><td>${s.played?pm(net?s.netDiff:s.diff):"-"}</td></tr>`).join("")}</table></div>`;})()}
     <div class="small">緑＝バーディー以下　橙＝ボギー　赤＝ダブルボギー以上${net?"（HDCP込みのネットで判定）":""}</div></div>
     ${G.handicapEnabled?renderHcpTable(hs,ps):""}`;
 }
 /* どのホールに誰のハンデが付くかの一覧（個人ハンデ配分。プレイヤー別ランダムでは各自の順位表） */
-function renderHcpTable(hs,ps){
+function renderHcpTable(hs,ps,hl){
   const tot=p=>hs.reduce((a,h)=>a+allowFor(p,h),0);
   return `<div class="card"><h2>ハンデ配分表</h2>
     <div class="small">${perPlayer()?"🎲🎲 プレイヤー別ランダム：数字はそのホールでもらう打数（各自別々の順位）":G.hcpMode==="random"?"🎲 ランダム配分：HDCP列はこのゲーム用にシャッフルした順位":"Hole HDCP順に個人ハンデを配分"}。${perPlayer()?"対戦は各自のネット同士で勝負します。":"対戦は2人のハンデ差で計算します。"}</div>
     <div class="wide" style="margin-top:6px;"><table class="scoreGrid"><tr><th>H</th><th>Par</th><th>HDCP</th>${ps.map(p=>`<th>${esc(p.name)}<br><span class="small">${p.handicap}</span></th>`).join("")}</tr>
-      ${hs.map(h=>`<tr><td class="l">${h.no}</td><td>${h.par}</td><td class="small">${h.hcp}</td>${ps.map(p=>{const a=allowFor(p,h);return `<td style="${a?"background:var(--primary2);color:var(--primary);font-weight:800;":"color:#c7cdd6;"}">${a||"·"}</td>`;}).join("")}</tr>`).join("")}
+      ${hs.map(h=>`<tr style="${h.no===hl?"background:#fffaeb;outline:2px solid #f9dbaf;":""}"><td class="l">${h.no===hl?"▶":""}${h.no}</td><td>${h.par}</td><td class="small">${h.hcp}</td>${ps.map(p=>{const a=allowFor(p,h);return `<td style="${a?"background:var(--primary2);color:var(--primary);font-weight:800;":"color:#c7cdd6;"}">${a||"·"}</td>`;}).join("")}</tr>`).join("")}
       <tr style="font-weight:800;background:#f2f4f7;"><td class="l" colspan="3">合計</td>${ps.map(p=>`<td>${tot(p)}</td>`).join("")}</tr></table></div></div>`;
 }
 /* ---- スコア入力（§16〜18） ---- */

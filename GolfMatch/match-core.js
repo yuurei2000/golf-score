@@ -58,13 +58,12 @@ const MatchCore = (() => {
     const sa = (scores && scores[pA.id]) || {}, sb = (scores && scores[pB.id]) || {};
     const order = (holeOrder && holeOrder.length === 18) ? holeOrder : playOrder("out");
     const byNo = {}; holes.forEach(h => { byNo[h.no] = h; });
-    let up = 0, thru = 0, closed = false;
+    let up = 0, thru = 0, closed = false, closeUp = 0, closeThru = 0;
     const detail = [];
     for (let idx = 0; idx < order.length; idx++) {   // プレー順に採点（残りホール数もプレー順で数える）
       const h = byNo[order[idx]]; if (!h) continue;
       const ga = sa[h.no], gb = sb[h.no];
       if (ga == null || gb == null) continue;      // 片方でも未入力なら対象外
-      if (closed) break;                           // 成立後のホールは採点しない
       const al = matchAllowance(pA, pB, h, handicapEnabled, perPlayer);
       const na = calculateNetScore(ga, al.a), nb = calculateNetScore(gb, al.b);
       const r = calculateHoleResult(na, nb);
@@ -72,8 +71,10 @@ const MatchCore = (() => {
       thru = idx + 1;                              // 消化ホール数（プレー順の位置）
       detail.push({ no: h.no, par: h.par, hcp: h.hcp, grossA: ga, grossB: gb,
         allowA: al.a, allowB: al.b, netA: na, netB: nb, result: r, up });
-      if (Math.abs(up) > 18 - thru) closed = true;
+      if (!closed && Math.abs(up) > 18 - thru) { closed = true; closeUp = up; closeThru = thru; }
     }
+    const upAll = up, thruAll = thru;             // 最終ホールまで採点した通算（成立後も参考表示用に計算）
+    if (closed) { up = closeUp; thru = closeThru; } // 勝敗・順位は成立時点の値で確定
     const remaining = 18 - thru;
     const finished = closed || thru === 18;
     const leader = up > 0 ? "A" : up < 0 ? "B" : null;
@@ -86,7 +87,7 @@ const MatchCore = (() => {
       label = up === 0 ? "AS" : `${Math.abs(up)}UP`;
     }
     const outcomeA = finished ? (up > 0 ? "W" : up < 0 ? "L" : "D") : (up > 0 ? "w" : up < 0 ? "l" : "d"); // 小文字＝暫定
-    return { a: pA, b: pB, up, thru, closed, finished, leader, label, holes: detail, outcomeA };
+    return { a: pA, b: pB, up, thru, closed, finished, leader, label, holes: detail, outcomeA, upAll, thruAll };
   }
 
   /* ---- 全プレイヤーの総当たり（§13・§14）---- 組をまたいで C(n,2) を生成 */
@@ -172,11 +173,19 @@ const MatchCore = (() => {
 
   /* ---- ランダム配分：1〜18の順位をシャッフル（ゲーム作成時に1回だけ確定・§ギャンブル要素）---- */
   function randomHcpOrder(rng) {
-    const a = Array.from({ length: 18 }, (_, i) => i + 1);
     const r = rng || Math.random;
-    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-    return a;
+    const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const front = shuffle(Array.from({ length: 9 }, (_, i) => i)), back = shuffle(Array.from({ length: 9 }, (_, i) => i + 9));
+    const frontOdd = r() < 0.5;                    // 奇数順位を前半に置くか（1番がどちらの半分かもランダム）
+    const ranks = new Array(18);
+    let fi = 0, bi = 0;
+    for (let rank = 1; rank <= 18; rank++) {       // 順位を前半・後半に交互に割り当て → どのハンデ数でも前後半ほぼ半分ずつ
+      const useFront = (rank % 2 === 1) === frontOdd;
+      ranks[useFront ? front[fi++] : back[bi++]] = rank;
+    }
+    return ranks;
   }
+
 
   return { calculateStrokeAllowance, calculateNetScore, calculateHoleResult, calculateMatchStatus,
     calculateAllMatches, calculatePlayerStandings, matchLabel, strokeSummary, personalAllowance, holeRankFor, matchAllowance,
