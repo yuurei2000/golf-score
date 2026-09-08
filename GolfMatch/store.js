@@ -41,7 +41,6 @@ const Store = (() => {
     name: "local",
     setCredential() {},   // ローカル版は権限をURLだけで判定（トークン照合はUI側）
     async listCourses() { return load(K_COURSES, []); },
-    async countCourses() { return load(K_COURSES, []).length; },
     markCourseUsed() {},
     async saveCourse(course) {
       const list = load(K_COURSES, []);

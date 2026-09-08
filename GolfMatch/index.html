@@ -131,7 +131,7 @@ window.addEventListener("hashchange",route);
 
 /* ============ ホーム ============ */
 async function renderHome(){
-  const games=await Store.listGames();
+  const games=(await Store.listGames()).filter(g=>g.status!=="deleted");
   $("app").innerHTML=`
     <div class="card">
       <h2>総当たりマッチプレー</h2>
@@ -149,24 +149,33 @@ async function renderHome(){
             <button class="btn sm" onclick="location.hash='#/g/${g.gameId}/a/${g.adminToken}'">管理者として開く</button>
             <button class="btn sm light" onclick="location.hash='#/g/${g.gameId}'">参加者として開く</button>
             <button class="btn sm gray" onclick="delGame('${g.gameId}')">${Store.mode==="local"?"削除":"一覧から外す"}</button>
+            ${Store.mode==="firebase"&&g.adminToken?`<button class="btn sm danger" onclick="deleteGameAsAdmin('${g.gameId}','${g.adminToken}')">削除</button>`:""}
           </div>
         </div>`).join(""):`<div class="small">まだゲームはありません。</div>`}
     </div>
     <div class="small">${Store.mode==="local"?"※ローカルモードでは、このブラウザ内でのみデータが共有されます。":"※オンラインモード：スコアはFirestoreに保存され、URLを開いた全員にリアルタイムで共有されます。圏外で登録した分は「未同期」と表示され、通信回復後に自動送信されます。"}</div>`;
 }
+/* ゲーム削除（管理者）：サーバーでは「削除済み」状態にして全端末で非表示にする（物理削除はルールで禁止） */
+async function deleteGameAsAdmin(id,token){
+  if(!confirm("このゲームを削除しますか？\n全員の画面から見えなくなります（元に戻せません）。"))return;
+  try{
+    if(Store.mode==="firebase"){ Store.setCredential({kind:"admin",token}); await Store.setStatus(id,"deleted"); }
+    await Store.deleteGame(id);
+    toast("削除しました");
+  }catch(e){ toast("削除できません："+(e.code==="permission-denied"?"権限がありません":e.message)); }
+  if(location.hash.startsWith("#/g/"))location.hash="#/"; else renderHome();
+}
 async function delGame(id){ if(!confirm(Store.mode==="local"?"このゲームを削除しますか？":"この端末の一覧から外しますか？（サーバー上のデータは残ります）"))return; await Store.deleteGame(id); renderHome(); }
 
 /* ============ コース管理 ============ */
-let showAllCourses=false;   // コース一覧：この端末のコースのみ／サーバー上のすべて
+let showAllCourses=false;   // （常にこの端末で登録したコースのみ表示）
 async function renderCourses(){
-  const list=await Store.listCourses(showAllCourses);
-  const total=Store.mode==="firebase"?await Store.countCourses():list.length;
+  const list=await Store.listCourses();
   $("app").innerHTML=`
     <div class="card">
       <h2>コース管理</h2>
       <button class="btn" onclick="location.hash='#/course/new'">＋ 新しいコースを登録</button>
-      ${Store.mode==="firebase"?`<div class="grid" style="margin-top:8px;"><button class="opt ${!showAllCourses?"sel":""}" onclick="showAllCourses=false;renderCourses()">この端末のコース</button><button class="opt ${showAllCourses?"sel":""}" onclick="showAllCourses=true;renderCourses()">すべて（${total}件）</button></div>
-      <div class="small" style="margin-top:4px;">「この端末のコース」＝この端末で登録したか、この端末で開いたゲームで使ったコース。他の人が登録したコースは「すべて」で表示し、選ぶと以後この端末の一覧にも出ます。</div>`:""}
+      ${Store.mode==="firebase"?`<div class="small" style="margin-top:6px;">この端末で登録したコースだけを表示します（他の端末・他の人が登録したコースは表示されません）。</div>`:""}
     </div>
     ${list.map(c=>`<div class="card">
       <div style="font-weight:800;font-size:17px;">${esc(c.name)}</div>
@@ -178,7 +187,7 @@ async function renderCourses(){
 async function delCourse(id){ if(!confirm("このコースを削除しますか？"))return; await Store.deleteCourse(id); renderCourses(); }
 let editCourse=null;
 async function renderCourseEdit(id){
-  if(id){ const list=await Store.listCourses(true); editCourse=JSON.parse(JSON.stringify(list.find(c=>c.courseId===id)||{})); Store.markCourseUsed(id); }
+  if(id){ const list=await Store.listCourses(); editCourse=JSON.parse(JSON.stringify(list.find(c=>c.courseId===id)||{})); }
   if(!id||!editCourse.courseId) editCourse={courseId:null,name:"",courseNames:["OUT","IN"],holes:defaultHoles()};
   $("app").innerHTML=`
     <div class="card">
@@ -229,10 +238,9 @@ async function wizStep(){
   const bar=`<div class="step">${[1,2,3,4,5,6,7].map(i=>`<span class="${i<=s?"on":""}"></span>`).join("")}</div>`;
   let body="";
   if(s===1){
-    const list=await Store.listCourses(showAllCourses);
+    const list=await Store.listCourses();
     body=`<h2>STEP1　コース選択</h2>
-      ${Store.mode==="firebase"?`<div class="grid" style="margin-bottom:6px;"><button class="opt ${!showAllCourses?"sel":""}" onclick="showAllCourses=false;wizStep()">この端末のコース</button><button class="opt ${showAllCourses?"sel":""}" onclick="showAllCourses=true;wizStep()">すべて</button></div>`:""}
-      ${list.length?list.map(c=>`<button class="opt ${wiz.courseId===c.courseId?"sel":""}" style="width:100%;text-align:left;margin-bottom:6px;" onclick="wiz.courseId='${c.courseId}';Store.markCourseUsed('${c.courseId}');wizStep()">${esc(c.name)}<span class="small" style="float:right;">Par${c.holes.reduce((a,h)=>a+h.par,0)}</span></button>`).join(""):`<div class="small">登録済みコースがありません。</div>`}
+      ${list.length?list.map(c=>`<button class="opt ${wiz.courseId===c.courseId?"sel":""}" style="width:100%;text-align:left;margin-bottom:6px;" onclick="wiz.courseId='${c.courseId}';wizStep()">${esc(c.name)}<span class="small" style="float:right;">Par${c.holes.reduce((a,h)=>a+h.par,0)}</span></button>`).join(""):`<div class="small">登録済みコースがありません。</div>`}
       <button class="btn light sm" onclick="location.hash='#/course/new'">＋ 新しいコースを登録</button>
       <label>プレー日</label><input type="date" id="wDate" value="${wiz.playDate}" onchange="wiz.playDate=this.value">
       ${(()=>{const cc=list.find(x=>x.courseId===wiz.courseId); if(!cc)return ""; const cn=cc.courseNames||["OUT","IN"];
@@ -353,6 +361,7 @@ let G=null, role={kind:"viewer"}, me=null, tab="my", inputHole=1, inputGroup=1, 
 async function openGame(id,r){
   gameId=id; role=r; tab="my"; openMatch=null;
   const g=await Store.getGame(id);
+  if(g&&g.status==="deleted"){ $("app").innerHTML=`<div class="card"><h2>このゲームは削除されました</h2><div class="small">管理者によって削除されたゲームです。</div><button class="btn gray" onclick="location.hash='#/'">ホームへ</button></div>`; await Store.deleteGame(id); return; }
   if(!g){$("app").innerHTML=`<div class="card"><h2>ゲームが見つかりません</h2><div class="small">URLを確認してください。ローカルモードでは作成した端末（ブラウザ）でのみ開けます。</div><button class="btn gray" onclick="location.hash='#/'">ホームへ</button></div>`;return;}
   // 権限解決
   if(r.kind==="admin"){ role=(Store.mode==="local"&&r.token!==g.adminToken)?{kind:"viewer"}:{kind:"admin",token:r.token}; }
@@ -367,7 +376,7 @@ async function openGame(id,r){
   if(role.kind==="scorer"&&!me){me=g.groups.find(x=>x.groupNo===role.groupNo).scorerPlayerId;Store.Identity.set(id,me);}
   inputGroup=role.kind==="scorer"?role.groupNo:1;
   inputHole=MatchCore.playOrder(g.startSide||"out")[0]; inputVals={};
-  unsub=Store.subscribeGame(id,game=>{ if(!game)return; G=game; if(!G.scores)G.scores={}; renderGame(); });
+  unsub=Store.subscribeGame(id,game=>{ if(!game)return; if(game.status==="deleted"){ if(unsub){unsub();unsub=null;} $("tabs").classList.remove("show"); $("app").innerHTML=`<div class="card"><h2>このゲームは削除されました</h2><button class="btn gray" onclick="location.hash='#/'">ホームへ</button></div>`; return; } G=game; if(!G.scores)G.scores={}; renderGame(); });
 }
 function canInput(){ return role.kind==="admin"||role.kind==="scorer"; }
 function renderTabs(){
@@ -590,7 +599,8 @@ function renderRank(){
   const finished=G.status==="finished";
   const adminBtns=role.kind==="admin"?(finished
     ?`<button class="btn gray sm" onclick="setGameStatus('playing')">ゲームを再開する（入力を再び可能にする）</button>`
-    :`<button class="btn sm" style="background:#16202a;" onclick="setGameStatus('finished')">ゲーム終了（順位を確定して入力を締める）</button>`):"";
+    :`<button class="btn sm" style="background:#16202a;" onclick="setGameStatus('finished')">ゲーム終了（順位を確定して入力を締める）</button>`)
+    +`<button class="btn sm danger" style="margin-top:10px;" onclick="deleteGameAsAdmin(gameId,role.token)">このゲームを削除</button>`:"";
   return `<div class="card"><h2>${formatLabel()}　${finished?"最終順位（確定）":st.provisional?"暫定順位":"最終順位"}</h2>${finished&&st.provisional?`<div class="small" style="color:var(--warn);">※未成立のマッチは終了時点の状況で集計しています</div>`:""}
     <table><tr><th>順位</th><th>Player</th><th>W</th><th>D</th><th>L</th><th>±</th></tr>
     ${st.rows.map(r=>`<tr class="${r.player.id===me?"":""}" style="${r.player.id===me?"background:var(--primary2);":""}"><td class="${r.rank===1?"rank1":""}" style="font-weight:800;">${r.rank}</td><td class="l">${esc(r.player.name)}<span class="small"> ${r.player.groupNo}組</span></td><td style="color:var(--win);font-weight:800;">${r.w}</td><td>${r.d}</td><td style="color:var(--lose);">${r.l}</td><td>${r.upSum>0?"+":""}${r.upSum}</td></tr>`).join("")}</table>

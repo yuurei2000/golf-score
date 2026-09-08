@@ -43,15 +43,14 @@ window.FirebaseStore = function (cfg) {
     name: "firebase",
     setCredential(c) { cred = Object.assign({ kind: "viewer", token: null, groupNo: null }, c || {}); },
 
-    // all=true でサーバー上の全コース、省略時はこの端末で登録・使用したコースだけ
+    // この端末で登録したコースだけを返す（他の端末／他の人が登録したコースは表示しない）。all=true は内部用（ゲーム作成時のID解決）
     async listCourses(all) {
       const s = await db.collection("courses").get();
       const mine = load(K_MYCOURSES, {});
       return s.docs.map(d => d.data()).filter(c => all || mine[c.courseId]).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     },
-    async countCourses() { const s = await db.collection("courses").get(); return s.size; },
     async saveCourse(c) { if (!c.courseId) c.courseId = uid(10); c.updatedAt = Date.now(); await db.collection("courses").doc(c.courseId).set(c); myCourseAdd(c.courseId); return c; },
-    markCourseUsed(id) { myCourseAdd(id); },
+    markCourseUsed() {},
     async deleteCourse(id) { await db.collection("courses").doc(id).delete(); },
 
     async createGame(game) {
@@ -66,7 +65,6 @@ window.FirebaseStore = function (cfg) {
       b.set(gameRef(game.gameId), pub);
       b.set(gameRef(game.gameId).collection("private").doc("tokens"), { adminToken, scorers });
       await b.commit();
-      myCourseAdd(game.course && game.course.courseId);
       indexPut({ gameId: game.gameId, playDate: game.playDate, courseName: game.course.name, playerNames: game.players.map(p => p.name),
         handicapEnabled: game.handicapEnabled, status: "playing", adminToken, scorerTokens: scorers, createdAt: game.createdAt });
       game.adminToken = adminToken; game.groups.forEach(gr => { gr.scorerToken = scorers[String(gr.groupNo)]; }); game.scores = {};
@@ -76,7 +74,6 @@ window.FirebaseStore = function (cfg) {
       const d = await gameRef(id).get(); if (!d.exists) return null;
       const sc = await gameRef(id).collection("scores").get();
       const g = assemble(d.data(), sc.docs);
-      myCourseAdd(g.course && g.course.courseId);
       const stDoc = await gameRef(id).collection("state").doc("main").get();
       if (stDoc.exists) { g.status = stDoc.data().status || g.status; g.finishedAt = stDoc.data().finishedAt || null; }
       indexPut({ gameId: id, playDate: g.playDate, courseName: g.course.name, playerNames: g.players.map(p => p.name),
