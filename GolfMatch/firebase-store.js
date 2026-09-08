@@ -15,13 +15,14 @@ window.FirebaseStore = function (cfg) {
   const db = firebase.firestore();
   try { db.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch (_) {}
 
-  const K_INDEX = "gm_index";
+  const K_INDEX = "gm_index", K_MYCOURSES = "gm_mycourses";   // この端末で登録・使用したコースID
   const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (_) { return d; } };
   const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
   const uid = (n = 8) => { const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; const b = new Uint8Array(n); crypto.getRandomValues(b); return Array.from(b, x => c[x % c.length]).join(""); };
   const token = () => { const b = new Uint8Array(16); crypto.getRandomValues(b); return Array.from(b, x => x.toString(16).padStart(2, "0")).join(""); };
   let cred = { kind: "viewer", token: null, groupNo: null };   // 現在のURLから得た権限（書き込み時にトークンを添える）
 
+  function myCourseAdd(id) { if (!id) return; const m = load(K_MYCOURSES, {}); m[id] = Date.now(); save(K_MYCOURSES, m); }
   function indexPut(e) { const idx = load(K_INDEX, {}); idx[e.gameId] = Object.assign(idx[e.gameId] || {}, e); save(K_INDEX, idx); }
   function assemble(g, scoreDocs) {
     g.scores = {};
@@ -42,8 +43,15 @@ window.FirebaseStore = function (cfg) {
     name: "firebase",
     setCredential(c) { cred = Object.assign({ kind: "viewer", token: null, groupNo: null }, c || {}); },
 
-    async listCourses() { const s = await db.collection("courses").get(); return s.docs.map(d => d.data()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); },
-    async saveCourse(c) { if (!c.courseId) c.courseId = uid(10); c.updatedAt = Date.now(); await db.collection("courses").doc(c.courseId).set(c); return c; },
+    // all=true でサーバー上の全コース、省略時はこの端末で登録・使用したコースだけ
+    async listCourses(all) {
+      const s = await db.collection("courses").get();
+      const mine = load(K_MYCOURSES, {});
+      return s.docs.map(d => d.data()).filter(c => all || mine[c.courseId]).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    },
+    async countCourses() { const s = await db.collection("courses").get(); return s.size; },
+    async saveCourse(c) { if (!c.courseId) c.courseId = uid(10); c.updatedAt = Date.now(); await db.collection("courses").doc(c.courseId).set(c); myCourseAdd(c.courseId); return c; },
+    markCourseUsed(id) { myCourseAdd(id); },
     async deleteCourse(id) { await db.collection("courses").doc(id).delete(); },
 
     async createGame(game) {
@@ -58,6 +66,7 @@ window.FirebaseStore = function (cfg) {
       b.set(gameRef(game.gameId), pub);
       b.set(gameRef(game.gameId).collection("private").doc("tokens"), { adminToken, scorers });
       await b.commit();
+      myCourseAdd(game.course && game.course.courseId);
       indexPut({ gameId: game.gameId, playDate: game.playDate, courseName: game.course.name, playerNames: game.players.map(p => p.name),
         handicapEnabled: game.handicapEnabled, status: "playing", adminToken, scorerTokens: scorers, createdAt: game.createdAt });
       game.adminToken = adminToken; game.groups.forEach(gr => { gr.scorerToken = scorers[String(gr.groupNo)]; }); game.scores = {};
@@ -67,6 +76,7 @@ window.FirebaseStore = function (cfg) {
       const d = await gameRef(id).get(); if (!d.exists) return null;
       const sc = await gameRef(id).collection("scores").get();
       const g = assemble(d.data(), sc.docs);
+      myCourseAdd(g.course && g.course.courseId);
       const stDoc = await gameRef(id).collection("state").doc("main").get();
       if (stDoc.exists) { g.status = stDoc.data().status || g.status; g.finishedAt = stDoc.data().finishedAt || null; }
       indexPut({ gameId: id, playDate: g.playDate, courseName: g.course.name, playerNames: g.players.map(p => p.name),

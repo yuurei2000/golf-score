@@ -157,12 +157,16 @@ async function renderHome(){
 async function delGame(id){ if(!confirm(Store.mode==="local"?"このゲームを削除しますか？":"この端末の一覧から外しますか？（サーバー上のデータは残ります）"))return; await Store.deleteGame(id); renderHome(); }
 
 /* ============ コース管理 ============ */
+let showAllCourses=false;   // コース一覧：この端末のコースのみ／サーバー上のすべて
 async function renderCourses(){
-  const list=await Store.listCourses();
+  const list=await Store.listCourses(showAllCourses);
+  const total=Store.mode==="firebase"?await Store.countCourses():list.length;
   $("app").innerHTML=`
     <div class="card">
       <h2>コース管理</h2>
       <button class="btn" onclick="location.hash='#/course/new'">＋ 新しいコースを登録</button>
+      ${Store.mode==="firebase"?`<div class="grid" style="margin-top:8px;"><button class="opt ${!showAllCourses?"sel":""}" onclick="showAllCourses=false;renderCourses()">この端末のコース</button><button class="opt ${showAllCourses?"sel":""}" onclick="showAllCourses=true;renderCourses()">すべて（${total}件）</button></div>
+      <div class="small" style="margin-top:4px;">「この端末のコース」＝この端末で登録したか、この端末で開いたゲームで使ったコース。他の人が登録したコースは「すべて」で表示し、選ぶと以後この端末の一覧にも出ます。</div>`:""}
     </div>
     ${list.map(c=>`<div class="card">
       <div style="font-weight:800;font-size:17px;">${esc(c.name)}</div>
@@ -174,7 +178,7 @@ async function renderCourses(){
 async function delCourse(id){ if(!confirm("このコースを削除しますか？"))return; await Store.deleteCourse(id); renderCourses(); }
 let editCourse=null;
 async function renderCourseEdit(id){
-  if(id){ const list=await Store.listCourses(); editCourse=JSON.parse(JSON.stringify(list.find(c=>c.courseId===id)||{})); }
+  if(id){ const list=await Store.listCourses(true); editCourse=JSON.parse(JSON.stringify(list.find(c=>c.courseId===id)||{})); Store.markCourseUsed(id); }
   if(!id||!editCourse.courseId) editCourse={courseId:null,name:"",courseNames:["OUT","IN"],holes:defaultHoles()};
   $("app").innerHTML=`
     <div class="card">
@@ -225,9 +229,10 @@ async function wizStep(){
   const bar=`<div class="step">${[1,2,3,4,5,6,7].map(i=>`<span class="${i<=s?"on":""}"></span>`).join("")}</div>`;
   let body="";
   if(s===1){
-    const list=await Store.listCourses();
+    const list=await Store.listCourses(showAllCourses);
     body=`<h2>STEP1　コース選択</h2>
-      ${list.length?list.map(c=>`<button class="opt ${wiz.courseId===c.courseId?"sel":""}" style="width:100%;text-align:left;margin-bottom:6px;" onclick="wiz.courseId='${c.courseId}';wizStep()">${esc(c.name)}<span class="small" style="float:right;">Par${c.holes.reduce((a,h)=>a+h.par,0)}</span></button>`).join(""):`<div class="small">登録済みコースがありません。</div>`}
+      ${Store.mode==="firebase"?`<div class="grid" style="margin-bottom:6px;"><button class="opt ${!showAllCourses?"sel":""}" onclick="showAllCourses=false;wizStep()">この端末のコース</button><button class="opt ${showAllCourses?"sel":""}" onclick="showAllCourses=true;wizStep()">すべて</button></div>`:""}
+      ${list.length?list.map(c=>`<button class="opt ${wiz.courseId===c.courseId?"sel":""}" style="width:100%;text-align:left;margin-bottom:6px;" onclick="wiz.courseId='${c.courseId}';Store.markCourseUsed('${c.courseId}');wizStep()">${esc(c.name)}<span class="small" style="float:right;">Par${c.holes.reduce((a,h)=>a+h.par,0)}</span></button>`).join(""):`<div class="small">登録済みコースがありません。</div>`}
       <button class="btn light sm" onclick="location.hash='#/course/new'">＋ 新しいコースを登録</button>
       <label>プレー日</label><input type="date" id="wDate" value="${wiz.playDate}" onchange="wiz.playDate=this.value">
       ${(()=>{const cc=list.find(x=>x.courseId===wiz.courseId); if(!cc)return ""; const cn=cc.courseNames||["OUT","IN"];
@@ -279,7 +284,7 @@ async function wizStep(){
       <div class="small" style="margin-top:6px;">ナッソー：前半9H・後半9H・18H合計の3つを別々の勝負として順位付けします（1人の相手につき3勝負）。<br>スキンズ（各ホールの単独最少ネットがスキンを獲得、同点は持ち越し）は形式に関係なく常に並行して計算し、別に順位付けします。</div>
       <button class="btn" onclick="wizNext()">次へ</button>`;
   }else if(s===7){
-    const list=await Store.listCourses(); const c=list.find(x=>x.courseId===wiz.courseId);
+    const list=await Store.listCourses(true); const c=list.find(x=>x.courseId===wiz.courseId);
     body=`<h2>STEP7　確認・ゲーム作成</h2>
       <div><b>コース：</b>${esc(c.name)}　<b>スタート：</b>${esc((c.courseNames||["OUT","IN"])[wiz.startSide==="in"?1:0])}　<b>日付：</b>${esc(wiz.playDate)}　<b>${wiz.handicapEnabled?(wiz.hcpMode==="random"?"ハンデ戦（ランダム配分）":wiz.hcpMode==="randomPlayer"?"ハンデ戦（プレイヤー別ランダム）":"ハンデ戦（Hole HDCP順）"):"スクラッチ戦"}</b>　<b>${wiz.format==="nassau"?"ナッソー":"18Hマッチ"}＋スキンズ</b></div>
       ${Array.from({length:wiz.groupCount},(_,k)=>k+1).map(g=>`<h3>${g}組（入力担当：${esc((wiz.players.find(p=>p.id===wiz.scorers[g])||{}).name)}）</h3>
@@ -306,7 +311,7 @@ function wizNext(){
   wiz.step++; wizStep();
 }
 async function wizCreate(){
-  const list=await Store.listCourses(); const c=list.find(x=>x.courseId===wiz.courseId);
+  const list=await Store.listCourses(true); const c=list.find(x=>x.courseId===wiz.courseId);
   const holes=JSON.parse(JSON.stringify(c.holes));
   if(wiz.handicapEnabled&&wiz.hcpMode==="random"){   // ランダム配分：HDCP順位をシャッフルして固定（元の値は hcpOriginal に保持）
     const order=MatchCore.randomHcpOrder();
