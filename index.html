@@ -258,10 +258,14 @@ td.hno{font-weight:800;background:#f9fafb;}
     <div class="small">最終結果・まとめで達成度を振り返ります</div>
     <div class="stepper">
       <span class="lbl">目標スコア</span>
+      <button type="button" onclick="adjGoalScore(-5)">−5</button>
       <button type="button" onclick="adjGoalScore(-1)">−</button>
       <span class="val" id="goalScoreVal">90</span>
       <button type="button" onclick="adjGoalScore(1)">＋</button>
+      <button type="button" onclick="adjGoalScore(5)">＋5</button>
     </div>
+    <!-- よく使う目標スコアをワンタップで設定（要望20260729） -->
+    <div class="btn-grid" id="goalPresetBtns" style="margin-top:6px;"></div>
     <!-- 目標スコアに応じたコメント（基準値表＋一般セオリー・要望20260729） -->
     <div id="goalCommentBox" style="margin-top:8px;padding:10px 12px;background:var(--primary2);border:1.5px solid var(--primary);border-radius:12px;font-size:13px;line-height:1.6;"></div>
     <!-- 目標ラインは廃止（要望20260729：目標スコアで代替） -->
@@ -771,16 +775,27 @@ function saveMyClubs(){
 
 /* ============ ラウンド前の意識 ============ */
 const GOAL_LINES=["120切り","100切り","90切り"];
+const GOAL_PRESETS=[72,80,85,90,95,100,110,120];   // ワンタップ設定（要望20260729）
 function renderIntent(){
   document.getElementById("goalScoreVal").textContent=intent.goalScore;
   document.getElementById("intentGoal").value=intent.goal||"";
   document.getElementById("intentFocus").value=intent.focus||"";
+  buildBtns("goalPresetBtns",GOAL_PRESETS.map(String),(v,b,el)=>{setGoalScore(parseInt(v));});
+  updateGoalPresetSel();
   renderGoalComment();
 }
-function adjGoalScore(d){
-  intent.goalScore=Math.max(36,Math.min(200,(intent.goalScore||90)+d));
+function setGoalScore(v){
+  intent.goalScore=Math.max(36,Math.min(200,v));
   document.getElementById("goalScoreVal").textContent=intent.goalScore;
+  updateGoalPresetSel();
   renderGoalComment();
+}
+function updateGoalPresetSel(){
+  const el=document.getElementById("goalPresetBtns"); if(!el)return;
+  el.querySelectorAll(".opt-btn").forEach(b=>b.classList.toggle("selected",parseInt(b.dataset.val)===intent.goalScore));
+}
+function adjGoalScore(d){
+  setGoalScore((intent.goalScore||90)+d);
 }
 /* 目標スコアに応じたコメント（スコア別基準値表＋一般的なセオリーの要約・要望20260729） */
 function goalCommentLines(goal){
