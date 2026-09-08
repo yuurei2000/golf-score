@@ -56,7 +56,8 @@ const MatchCore = (() => {
   function calculateMatchStatus(pA, pB, holes, scores, handicapEnabled, holeOrder, opts) {
     const perPlayer = !!(opts && opts.perPlayer);
     const sa = (scores && scores[pA.id]) || {}, sb = (scores && scores[pB.id]) || {};
-    const order = (holeOrder && holeOrder.length === 18) ? holeOrder : playOrder("out");
+    const order = (holeOrder && holeOrder.length) ? holeOrder : playOrder("out");
+    const total = order.length;                     // 18Hマッチなら18、ナッソーの前半/後半なら9
     const byNo = {}; holes.forEach(h => { byNo[h.no] = h; });
     let up = 0, thru = 0, closed = false, closeUp = 0, closeThru = 0;
     const detail = [];
@@ -71,12 +72,12 @@ const MatchCore = (() => {
       thru = idx + 1;                              // 消化ホール数（プレー順の位置）
       detail.push({ no: h.no, par: h.par, hcp: h.hcp, grossA: ga, grossB: gb,
         allowA: al.a, allowB: al.b, netA: na, netB: nb, result: r, up });
-      if (!closed && Math.abs(up) > 18 - thru) { closed = true; closeUp = up; closeThru = thru; }
+      if (!closed && Math.abs(up) > total - thru) { closed = true; closeUp = up; closeThru = thru; }
     }
     const upAll = up, thruAll = thru;             // 最終ホールまで採点した通算（成立後も参考表示用に計算）
     if (closed) { up = closeUp; thru = closeThru; } // 勝敗・順位は成立時点の値で確定
-    const remaining = 18 - thru;
-    const finished = closed || thru === 18;
+    const remaining = total - thru;
+    const finished = closed || thru === total;
     const leader = up > 0 ? "A" : up < 0 ? "B" : null;
     let label;
     if (finished) {
@@ -98,6 +99,64 @@ const MatchCore = (() => {
       for (let j = i + 1; j < ps.length; j++)
         out.push(calculateMatchStatus(ps[i], ps[j], holes, scores, handicapEnabled, holeOrder, opts));
     return out;
+  }
+
+  /* ---- ナッソー：前半9H・後半9H・18H合計の3勝負（プレー順の前9／後9で区切る）---- */
+  function calculateNassau(pA, pB, holes, scores, handicapEnabled, holeOrder, opts) {
+    const order = (holeOrder && holeOrder.length === 18) ? holeOrder : playOrder("out");
+    return {
+      a: pA, b: pB,
+      front: calculateMatchStatus(pA, pB, holes, scores, handicapEnabled, order.slice(0, 9), opts),
+      back:  calculateMatchStatus(pA, pB, holes, scores, handicapEnabled, order.slice(9), opts),
+      total: calculateMatchStatus(pA, pB, holes, scores, handicapEnabled, order, opts)
+    };
+  }
+  function calculateAllNassau(players, holes, scores, handicapEnabled, holeOrder, opts) {
+    const ps = players.slice().sort((x, y) => (x.displayOrder || 0) - (y.displayOrder || 0));
+    const out = [];
+    for (let i = 0; i < ps.length; i++)
+      for (let j = i + 1; j < ps.length; j++)
+        out.push(calculateNassau(ps[i], ps[j], holes, scores, handicapEnabled, holeOrder, opts));
+    return out;
+  }
+  /* ナッソーの3勝負を順位計算用にフラットにする（前半・後半・合計を1勝負ずつ数える） */
+  function flattenNassau(pairs) {
+    const out = [];
+    pairs.forEach(p => { out.push(p.front, p.back, p.total); });
+    return out;
+  }
+
+  /* ---- スキンズ：各ホール、単独最少ネット（スクラッチならグロス）の人がスキンを獲得。同点は次ホールへ持ち越し。
+     全員が入力済みのホールだけ判定（組の進行差に対応）。ネットは個人ハンデ配分（プレイヤー別ランダムなら各自の順位表）。 ---- */
+  function calculateSkins(players, holes, scores, handicapEnabled, holeOrder, opts) {
+    const perPlayer = !!(opts && opts.perPlayer);
+    const order = (holeOrder && holeOrder.length) ? holeOrder : playOrder("out");
+    const byNo = {}; holes.forEach(h => { byNo[h.no] = h; });
+    const totals = {}; players.forEach(p => { totals[p.id] = 0; });
+    const rows = []; let carry = 0, played = 0;
+    for (const no of order) {
+      const h = byNo[no]; if (!h) continue;
+      const nets = players.map(p => {
+        const g = (scores[p.id] || {})[no];
+        return { p, gross: g, net: g == null ? null : g - personalAllowance(p.handicap, holeRankFor(p, h, perPlayer), handicapEnabled) };
+      });
+      if (nets.some(n => n.net == null)) { rows.push({ no, par: h.par, pending: true, nets }); continue; }   // 未入力者がいる → 判定保留
+      played++;
+      const min = Math.min(...nets.map(n => n.net));
+      const winners = nets.filter(n => n.net === min);
+      if (winners.length === 1) {
+        const won = carry + 1; totals[winners[0].p.id] += won;
+        rows.push({ no, par: h.par, winner: winners[0].p, skins: won, carryIn: carry, nets });
+        carry = 0;
+      } else {
+        carry++;
+        rows.push({ no, par: h.par, winner: null, skins: 0, carryIn: carry - 1, tie: winners.map(w => w.p), nets });
+      }
+    }
+    const ranking = players.slice().sort((x, y) => (totals[y.id] - totals[x.id]) || ((x.displayOrder || 0) - (y.displayOrder || 0)));
+    let rank = 0, prev = null;
+    const rankRows = ranking.map((p, i) => { if (totals[p.id] !== prev) { rank = i + 1; prev = totals[p.id]; } return { player: p, skins: totals[p.id], rank }; });
+    return { rows, totals, carry, played, ranking: rankRows };
   }
 
   /* ---- 順位（§22・§23）----
@@ -188,7 +247,8 @@ const MatchCore = (() => {
 
 
   return { calculateStrokeAllowance, calculateNetScore, calculateHoleResult, calculateMatchStatus,
-    calculateAllMatches, calculatePlayerStandings, matchLabel, strokeSummary, personalAllowance, holeRankFor, matchAllowance,
+    calculateAllMatches, calculateNassau, calculateAllNassau, flattenNassau, calculateSkins,
+    calculatePlayerStandings, matchLabel, strokeSummary, personalAllowance, holeRankFor, matchAllowance,
     randomHcpOrder, playOrder, validateCourse };
 })();
 if (typeof module !== "undefined") module.exports = MatchCore;

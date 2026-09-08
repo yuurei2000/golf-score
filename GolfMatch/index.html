@@ -217,7 +217,7 @@ async function saveCourseEdit(){
 /* ============ ゲーム作成ウィザード（STEP1〜8） ============ */
 let wiz=null;
 function renderWizard(){
-  wiz={step:1,courseId:null,n:4,players:[],groupCount:1,scorers:{1:null,2:null},handicapEnabled:true,hcpMode:"hole",startSide:"out",playDate:today()};
+  wiz={step:1,courseId:null,n:4,players:[],groupCount:1,scorers:{1:null,2:null},handicapEnabled:true,hcpMode:"hole",format:"match18",startSide:"out",playDate:today()};
   wizStep();
 }
 async function wizStep(){
@@ -274,11 +274,14 @@ async function wizStep(){
         Hole HDCP順：対戦2人のハンデ差を、コースのHole HDCP順に1打ずつ配ります（差18超は全ホール＋α）。<br>
         ランダム配分：ハンデをもらうホールの順位を、ゲーム作成時にランダムに決めます（全員共通・コースの難易度と無関係）。<br>
         プレイヤー別ランダム：一人ひとり別々のランダム順位で自分のハンデを配ります。同じハンデ2でも付くホールが人によって違い、対戦は各自のネット同士で勝負します。</div>
+      <h3>マッチ形式</h3>
+      <div class="grid"><button class="opt big ${wiz.format==="match18"?"sel":""}" onclick="wiz.format='match18';wizStep()">18Hマッチ</button><button class="opt big ${wiz.format==="nassau"?"sel":""}" onclick="wiz.format='nassau';wizStep()">ナッソー</button></div>
+      <div class="small" style="margin-top:6px;">ナッソー：前半9H・後半9H・18H合計の3つを別々の勝負として順位付けします（1人の相手につき3勝負）。<br>スキンズ（各ホールの単独最少ネットがスキンを獲得、同点は持ち越し）は形式に関係なく常に並行して計算し、別に順位付けします。</div>
       <button class="btn" onclick="wizNext()">次へ</button>`;
   }else if(s===7){
     const list=await Store.listCourses(); const c=list.find(x=>x.courseId===wiz.courseId);
     body=`<h2>STEP7　確認・ゲーム作成</h2>
-      <div><b>コース：</b>${esc(c.name)}　<b>スタート：</b>${esc((c.courseNames||["OUT","IN"])[wiz.startSide==="in"?1:0])}　<b>日付：</b>${esc(wiz.playDate)}　<b>${wiz.handicapEnabled?(wiz.hcpMode==="random"?"ハンデ戦（ランダム配分）":wiz.hcpMode==="randomPlayer"?"ハンデ戦（プレイヤー別ランダム）":"ハンデ戦（Hole HDCP順）"):"スクラッチ戦"}</b></div>
+      <div><b>コース：</b>${esc(c.name)}　<b>スタート：</b>${esc((c.courseNames||["OUT","IN"])[wiz.startSide==="in"?1:0])}　<b>日付：</b>${esc(wiz.playDate)}　<b>${wiz.handicapEnabled?(wiz.hcpMode==="random"?"ハンデ戦（ランダム配分）":wiz.hcpMode==="randomPlayer"?"ハンデ戦（プレイヤー別ランダム）":"ハンデ戦（Hole HDCP順）"):"スクラッチ戦"}</b>　<b>${wiz.format==="nassau"?"ナッソー":"18Hマッチ"}＋スキンズ</b></div>
       ${Array.from({length:wiz.groupCount},(_,k)=>k+1).map(g=>`<h3>${g}組（入力担当：${esc((wiz.players.find(p=>p.id===wiz.scorers[g])||{}).name)}）</h3>
         <div>${wiz.players.filter(p=>p.groupNo===g).map(p=>`${esc(p.name)}（HDCP ${p.handicap}）`).join("／")}</div>`).join("")}
       <div class="small" style="margin-top:8px;">総当たり ${wiz.n*(wiz.n-1)/2} マッチを自動計算します。</div>
@@ -311,7 +314,7 @@ async function wizCreate(){
   }
   const game={
     playDate:wiz.playDate, handicapEnabled:wiz.handicapEnabled, hcpMode:wiz.handicapEnabled?wiz.hcpMode:"none",
-    startSide:wiz.startSide, holeOrder:MatchCore.playOrder(wiz.startSide),
+    startSide:wiz.startSide, holeOrder:MatchCore.playOrder(wiz.startSide), format:wiz.format||"match18",
     course:{courseId:c.courseId,name:c.name,courseNames:c.courseNames,holes},
     players:wiz.players.map((p,i)=>{
       const pl={id:p.id,name:p.name.trim(),groupNo:p.groupNo,handicap:p.handicap||0,displayOrder:i+1};
@@ -363,7 +366,7 @@ async function openGame(id,r){
 }
 function canInput(){ return role.kind==="admin"||role.kind==="scorer"; }
 function renderTabs(){
-  const t=[["my","🎯","マイマッチ"],["all","⚔","全マッチ"],["rank","🏆","ランキング"],["score","📋","スコア表"]];
+  const t=[["my","🎯","マイマッチ"],["all","⚔","全マッチ"],["rank","🏆","ランキング"],["skins","💰","スキンズ"],["score","📋","スコア表"]];
   if(canInput()&&G.status!=="finished")t.push(["input","✏️","入力"]);
   $("tabs").innerHTML=t.map(([k,ic,l])=>`<button class="${tab===k?"on":""}" onclick="tab='${k}';openMatch=null;renderGame()"><span class="ic">${ic}</span>${l}</button>`).join("");
   $("tabs").classList.add("show");
@@ -373,7 +376,7 @@ function renderGame(){
   const mePl=G.players.find(p=>p.id===me);
   const head=`<div class="card" style="padding:10px 14px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <div><div style="font-weight:800;">${esc(G.course.name)}</div><div class="small">${esc(G.playDate)}　${hcpModeLabel(G)}　${G.players.length}人・${G.groups.length}組${G.startSide==="in"?`・${esc((G.course.courseNames||[])[1]||"IN")}スタート`:""} <span class="pill ${role.kind==="viewer"?"":"prim"}">${role.kind==="admin"?"管理者":role.kind==="scorer"?`${role.groupNo}組 入力担当`:"閲覧"}</span>${Store.mode==="firebase"?(G.__pending?` <span class="pill lose">未同期（送信待ち）</span>`:` <span class="pill win">同期済</span>`):""}${G.status==="finished"?` <span class="pill" style="background:#16202a;color:#fff;">ゲーム終了</span>`:""}</div></div>
+      <div><div style="font-weight:800;">${esc(G.course.name)}</div><div class="small">${esc(G.playDate)}　${hcpModeLabel(G)}・${formatLabel()}＋スキンズ　${G.players.length}人・${G.groups.length}組${G.startSide==="in"?`・${esc((G.course.courseNames||[])[1]||"IN")}スタート`:""} <span class="pill ${role.kind==="viewer"?"":"prim"}">${role.kind==="admin"?"管理者":role.kind==="scorer"?`${role.groupNo}組 入力担当`:"閲覧"}</span>${Store.mode==="firebase"?(G.__pending?` <span class="pill lose">未同期（送信待ち）</span>`:` <span class="pill win">同期済</span>`):""}${G.status==="finished"?` <span class="pill" style="background:#16202a;color:#fff;">ゲーム終了</span>`:""}</div></div>
       <div style="display:flex;gap:6px;flex:0 0 auto;">
         <button class="opt" style="min-height:40px;padding:6px 10px;font-size:13px;" onclick="askWho()">${mePl?esc(mePl.name):"あなたは？"}</button>
         <button class="opt" style="min-height:40px;min-width:40px;padding:6px 8px;font-size:13px;" onclick="showQr()" title="参加QR">QR</button>
@@ -386,6 +389,7 @@ function renderGame(){
   else if(tab==="all")body=renderAll();
   else if(tab==="rank")body=renderRank();
   else if(tab==="score")body=renderScoreTab();
+  else if(tab==="skins")body=renderSkins();
   else if(tab==="input")body=renderInput();
   const sy=window.scrollY;
   $("app").innerHTML=head+body;
@@ -402,6 +406,17 @@ function askWho(){
 }
 function chooseMe(pid){ me=pid; Store.Identity.set(gameId,pid); document.querySelectorAll(".modal").forEach(x=>x.remove()); renderGame(); }
 function perPlayer(){ return G.hcpMode==="randomPlayer"; }
+function isNassau(){ return G.format==="nassau"; }
+function formatLabel(){ return isNassau()?"ナッソー":"18Hマッチ"; }
+function sortedPlayers(){ return G.players.slice().sort((a,b)=>a.displayOrder-b.displayOrder); }
+function nassauPairs(){ return MatchCore.calculateAllNassau(G.players,G.course.holes,G.scores,G.handicapEnabled,holeOrder(),{perPlayer:perPlayer()}); }
+/* 順位計算に使う勝負の一覧：18Hマッチは各ペア1勝負、ナッソーは各ペア3勝負（前半・後半・合計） */
+function standingMatches(){ return isNassau()?MatchCore.flattenNassau(nassauPairs()):allMatches(); }
+function skinsResult(){ return MatchCore.calculateSkins(sortedPlayers(),G.course.holes,G.scores,G.handicapEnabled,holeOrder(),{perPlayer:perPlayer()}); }
+/* ナッソーの3勝負をアイコン3行で表示（sign：視点 +1=a側／-1=b側） */
+function nassauIcons(pr,sign){
+  return [["前",pr.front],["後",pr.back],["計",pr.total]].map(([lb,sm])=>`<div style="font-size:14px;white-space:nowrap;"><span class="small" style="display:inline-block;width:1.2em;">${lb}</span>${upIcons(sm.up*sign,sm)}</div>`).join("");
+}
 function hcpModeLabel(g){ return !g.handicapEnabled?"スクラッチ戦":g.hcpMode==="random"?"🎲ハンデ戦(ランダム)":g.hcpMode==="randomPlayer"?"🎲🎲ハンデ戦(プレイヤー別ランダム)":"ハンデ戦"; }
 /* 個人ハンデ基準のこのホールの打数（プレイヤー別ランダムでは各自の順位表を使用） */
 function allowFor(p,h){ return MatchCore.personalAllowance(p.handicap,MatchCore.holeRankFor(p,h,perPlayer()),G.handicapEnabled); }
@@ -460,7 +475,9 @@ function matchDetail(m,viewPid){
 function renderMy(mePl){
   if(!mePl)return `<div class="card"><div class="small">右上の「あなたは？」から自分の名前を選んでください。</div></div>`;
   const all=allMatches(), ms=all.filter(m=>m.a.id===me||m.b.id===me);
-  const st=MatchCore.calculatePlayerStandings(G.players,all), row=st.rows.find(r=>r.player.id===me);
+  const st=MatchCore.calculatePlayerStandings(G.players,standingMatches()), row=st.rows.find(r=>r.player.id===me);
+  const prs=isNassau()?nassauPairs():null;
+  const sk=skinsResult(), skRow=sk.ranking.find(r=>r.player.id===me);
   const ss=MatchCore.strokeSummary(mePl,G.course.holes,G.scores,G.handicapEnabled,perPlayer());
   const nh=nextHoleInfo(mePl);
   const sel=openMatch?ms.find(m=>`${m.a.id}-${m.b.id}`===openMatch):null;
@@ -470,7 +487,8 @@ function renderMy(mePl){
       <div><span class="small">${st.provisional?"暫定":"最終"}順位</span><div style="font-size:26px;font-weight:900;">${row.rank}位 <span style="font-size:14px;color:var(--sub);">/ ${G.players.length}人</span></div></div>
       <div style="text-align:right;"><span class="pill win">${row.w}勝</span> <span class="pill as">${row.d}分</span> <span class="pill lose">${row.l}敗</span><div class="small">UP/DOWN合計 ${fmtDiff(row.upSum)}</div></div></div>
     <table style="margin-top:8px;"><tr><th>ホール</th><th>TOTAL</th><th>±</th>${G.handicapEnabled?`<th>NET</th><th>±</th>`:""}</tr>
-      <tr><td style="font-weight:800;">${ss.played}H</td><td style="font-weight:800;font-size:16px;">${ss.played?ss.gross:"-"}</td><td>${ss.played?pmTxt(ss.diff):"-"}</td>${G.handicapEnabled?`<td style="font-weight:800;font-size:16px;">${ss.played?ss.net:"-"}</td><td>${ss.played?pmTxt(ss.netDiff):"-"}</td>`:""}</tr></table></div>
+      <tr><td style="font-weight:800;">${ss.played}H</td><td style="font-weight:800;font-size:16px;">${ss.played?ss.gross:"-"}</td><td>${ss.played?pmTxt(ss.diff):"-"}</td>${G.handicapEnabled?`<td style="font-weight:800;font-size:16px;">${ss.played?ss.net:"-"}</td><td>${ss.played?pmTxt(ss.netDiff):"-"}</td>`:""}</tr></table>
+    <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;"><span class="small">${formatLabel()}順位 ${row.rank}位（${row.w}勝${row.d}分${row.l}敗）</span><span class="pill prim">💰 スキンズ ${skRow?skRow.skins:0}（${skRow?skRow.rank:"-"}位）${sk.carry?`・持越し${sk.carry}`:""}</span></div></div>
     ${nh?`<div class="card" style="padding:10px 14px;background:#fffaeb;border-color:#f9dbaf;"><b>次のホール：${nh.h.no}H</b> <span class="small">Par${nh.h.par} / HDCP ${nh.h.hcp}</span>
       <div class="small" style="margin-top:4px;line-height:1.7;">${nh.lines.join("<br>")}</div></div>`:""}
     <h3>${esc(mePl.name)}のMATCH（タップで詳細）</h3>
@@ -478,24 +496,24 @@ function renderMy(mePl){
       ${ms.map(m=>{const o=m.a.id===me?m.b:m.a, upMe=m.a.id===me?m.up:-m.up, key=`${m.a.id}-${m.b.id}`;
         return `<tr onclick="openMatch=openMatch==='${key}'?null:'${key}';renderGame()" style="cursor:pointer;${openMatch===key?"background:var(--primary2);":""}">
           <td class="l" style="font-size:16px;">${esc(o.name)}<span class="small"> ${o.handicap}</span></td>
-          <td style="font-size:18px;text-align:left;">${upIcons(upMe,m)}${finalNote(m,m.a.id===me?1:-1)}</td>
+          <td style="font-size:18px;text-align:left;">${prs?nassauIcons(prs.find(p=>p.a.id===m.a.id&&p.b.id===m.b.id),m.a.id===me?1:-1):upIcons(upMe,m)+finalNote(m,m.a.id===me?1:-1)}</td>
           <td class="small">${m.thru?m.thru+"H":"-"}${m.finished?"<br>✔":""}</td></tr>`;}).join("")}</table></div>
     ${sel?matchCard(sel,me):""}
     ${G.handicapEnabled?renderHcpTable(orderedHoles(),ps,nh?nh.h.no:null):""}`;
 }
 /* 全マッチ：縦横に名前を並べた対戦表（行のプレイヤーから見た状況）。セルをタップで詳細表示 */
 function renderAll(){
-  const ms=allMatches();
+  const ms=allMatches(), prs=isNassau()?nassauPairs():null;
   const ps=G.players.slice().sort((a,b)=>a.displayOrder-b.displayOrder);
   const find=(x,y)=>ms.find(m=>(m.a.id===x.id&&m.b.id===y.id)||(m.a.id===y.id&&m.b.id===x.id));
   const cell=(r,c)=>{
     if(r.id===c.id)return `<td style="background:#f2f4f7;"></td>`;
     const m=find(r,c); const key=`${m.a.id}-${m.b.id}`;
     const upR=(m.a.id===r.id)?m.up:-m.up;          // 行プレイヤー視点
-    return `<td onclick="openMatch=openMatch==='${key}'?null:'${key}';renderGame()" style="cursor:pointer;white-space:nowrap;text-align:left;${openMatch===key?"outline:2px solid var(--primary);":""}">${upIcons(upR,m)}${finalNote(m,m.a.id===r.id?1:-1)}</td>`;
+    return `<td onclick="openMatch=openMatch==='${key}'?null:'${key}';renderGame()" style="cursor:pointer;white-space:nowrap;text-align:left;${openMatch===key?"outline:2px solid var(--primary);":""}">${prs?nassauIcons(prs.find(p=>p.a.id===m.a.id&&p.b.id===m.b.id),m.a.id===r.id?1:-1):upIcons(upR,m)+finalNote(m,m.a.id===r.id?1:-1)}</td>`;
   };
   const sel=openMatch?ms.find(m=>`${m.a.id}-${m.b.id}`===openMatch):null;
-  return `<div class="card"><h2>全MATCH（${ms.length}マッチ）</h2>
+  return `<div class="card"><h2>全MATCH（${ms.length}マッチ${isNassau()?"×3勝負":""}）</h2>
     <div class="small">行の人から見た状況（⬆＝UP／⬇＝DOWN／－＝AS）。セルをタップで詳細。</div>
     <div class="wide" style="margin-top:6px;"><table style="font-size:12px;">
       <tr><th style="position:sticky;left:0;background:#f2f4f7;"></th>${ps.map(p=>`<th>${esc(p.name)}</th>`).join("")}</tr>
@@ -563,16 +581,16 @@ async function setGameStatus(status){
 }
 function leaveGame(){ if(confirm("ゲーム画面を閉じてホームに戻りますか？\n（データは保存されています。URLやホームの一覧から再度開けます）"))location.hash="#/"; }
 function renderRank(){
-  const st=MatchCore.calculatePlayerStandings(G.players,allMatches());
+  const st=MatchCore.calculatePlayerStandings(G.players,standingMatches());
   const finished=G.status==="finished";
   const adminBtns=role.kind==="admin"?(finished
     ?`<button class="btn gray sm" onclick="setGameStatus('playing')">ゲームを再開する（入力を再び可能にする）</button>`
     :`<button class="btn sm" style="background:#16202a;" onclick="setGameStatus('finished')">ゲーム終了（順位を確定して入力を締める）</button>`):"";
-  return `<div class="card"><h2>${finished?"最終順位（確定）":st.provisional?"暫定順位":"最終順位"}</h2>${finished&&st.provisional?`<div class="small" style="color:var(--warn);">※未成立のマッチは終了時点の状況で集計しています</div>`:""}
+  return `<div class="card"><h2>${formatLabel()}　${finished?"最終順位（確定）":st.provisional?"暫定順位":"最終順位"}</h2>${finished&&st.provisional?`<div class="small" style="color:var(--warn);">※未成立のマッチは終了時点の状況で集計しています</div>`:""}
     <table><tr><th>順位</th><th>Player</th><th>W</th><th>D</th><th>L</th><th>±</th></tr>
     ${st.rows.map(r=>`<tr class="${r.player.id===me?"":""}" style="${r.player.id===me?"background:var(--primary2);":""}"><td class="${r.rank===1?"rank1":""}" style="font-weight:800;">${r.rank}</td><td class="l">${esc(r.player.name)}<span class="small"> ${r.player.groupNo}組</span></td><td style="color:var(--win);font-weight:800;">${r.w}</td><td>${r.d}</td><td style="color:var(--lose);">${r.l}</td><td>${r.upSum>0?"+":""}${r.upSum}</td></tr>`).join("")}</table>
-    <div class="small" style="margin-top:6px;">順位＝勝利数 → 引き分け数 → 全マッチのUP/DOWN合計。${st.provisional?"未成立のマッチは現在の状況で暫定集計しています。":"全マッチ成立済みです。"}</div>
-    ${adminBtns}</div>`;
+    <div class="small" style="margin-top:6px;">順位＝勝利数 → 引き分け数 → 全マッチのUP/DOWN合計${isNassau()?"（前半・後半・合計を1勝負ずつ数えます）":""}。${st.provisional?"未成立のマッチは現在の状況で暫定集計しています。":"全マッチ成立済みです。"}</div>
+    ${adminBtns}</div>${renderSkinsRank()}`;
 }
 let scoreMode="gross";   // ホール別の表示：gross＝グロス／net＝HDCP込み（ネット）
 function renderScoreTab(){
@@ -605,6 +623,28 @@ function renderScoreTab(){
         <td style="font-weight:800;">${s.played?(net?s.net:s.gross):"-"}</td><td>${s.played?pm(net?s.netDiff:s.diff):"-"}</td></tr>`).join("")}</table></div>`;})()}
     <div class="small">緑＝バーディー以下　橙＝ボギー　赤＝ダブルボギー以上${net?"（HDCP込みのネットで判定）":""}</div></div>
     ${G.handicapEnabled?renderHcpTable(hs,ps):""}`;
+}
+/* スキンズ順位（ランキング画面の下部） */
+function renderSkinsRank(){
+  const sk=skinsResult();
+  return `<div class="card"><h2>💰 スキンズ順位</h2>
+    <table><tr><th>順位</th><th>Player</th><th>スキン</th></tr>
+    ${sk.ranking.map(r=>`<tr style="${r.player.id===me?"background:var(--primary2);":""}"><td class="${r.rank===1&&r.skins>0?"rank1":""}" style="font-weight:800;">${r.rank}</td><td class="l">${esc(r.player.name)}</td><td style="font-weight:800;font-size:16px;">${r.skins}</td></tr>`).join("")}</table>
+    <div class="small" style="margin-top:6px;">判定済み ${sk.played}H／持ち越し中 <b>${sk.carry}</b>（次に単独最少の人が ${sk.carry+1} スキン獲得）。各ホール、全員が入力済みになった時点で判定します。</div></div>`;
+}
+/* スキンズタブ：ホールごとの獲得状況 */
+function renderSkins(){
+  const sk=skinsResult(), ps=sortedPlayers();
+  const rows=sk.rows.map(r=>{
+    const cells=r.nets.map(n=>{const win=r.winner&&r.winner.id===n.p.id; const tie=r.tie&&r.tie.some(t=>t.id===n.p.id);
+      return `<td style="${win?"background:var(--primary2);color:var(--primary);font-weight:900;":tie?"color:var(--warn);font-weight:800;":n.net==null?"color:#c7cdd6;":""}">${n.net==null?"·":n.net}${n.net!=null&&n.gross!==n.net?`<div class="pm">(${n.gross})</div>`:""}</td>`;}).join("");
+    const res=r.pending?`<span class="small">未確定</span>`:r.winner?`<b style="color:var(--primary);">${esc(r.winner.name)}</b> <span class="pill win">${r.skins}</span>`:`<span class="small">同点→持越し</span>`;
+    return `<tr style="${r.pending?"opacity:.55;":""}"><td class="l">${r.no}</td><td>${r.par}</td>${cells}<td style="white-space:nowrap;">${res}</td></tr>`;}).join("");
+  return `<div class="card"><h2>💰 スキンズ</h2>
+    <div class="small">各ホール、単独で最少${G.handicapEnabled?"ネット":"グロス"}の人がスキンを獲得。同点は次ホールへ持ち越し（数字は${G.handicapEnabled?"ネット、( )内はグロス":"グロス"}）。</div>
+    <div class="wide" style="margin-top:6px;"><table class="scoreGrid"><tr><th>H</th><th>Par</th>${ps.map(p=>`<th>${esc(p.name)}</th>`).join("")}<th>獲得</th></tr>${rows}
+      <tr style="font-weight:800;background:#f2f4f7;"><td class="l" colspan="2">合計</td>${ps.map(p=>`<td>${sk.totals[p.id]}</td>`).join("")}<td>持越し ${sk.carry}</td></tr></table></div></div>
+    ${renderSkinsRank()}`;
 }
 /* どのホールに誰のハンデが付くかの一覧（個人ハンデ配分。プレイヤー別ランダムでは各自の順位表） */
 function renderHcpTable(hs,ps,hl){

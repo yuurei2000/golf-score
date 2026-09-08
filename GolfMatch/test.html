@@ -141,6 +141,34 @@ m=C.calculateMatchStatus(PA,PB,holes,sPP,true,null,{perPlayer:true});
 eq("プレイヤー別：1HはPA勝ち・18HはPB勝ち → AS", [m.holes[0].result,m.holes[1].result,m.up],["A","B",0]);
 eq("strokeSummary もプレイヤー別順位で配分", C.strokeSummary(PB,holes,sPP,true,true).allow,1);
 eq("holeRankFor：順位表なしはコースHDCP", C.holeRankFor({},holes[0],true),holes[0].hcp);
+/* ナッソー：前半9H／後半9H／18H合計の3勝負 */
+const sN={a:{},b:{}}; for(let h=1;h<=18;h++){sN.a[h]=4;sN.b[h]=(h<=2)?5:(h>=17)?3:4;}   // 前半 A 2UP、後半 B 2UP、合計 AS
+let nz=C.calculateNassau(A,B,holes,sN,false);
+eq("ナッソー：前半 A 2UP（8H時点で残り1 → 2&1 成立）", [nz.front.up,nz.front.finished,nz.front.label],[2,true,"2&1"]);
+eq("ナッソー：後半 B 2UP 成立", [nz.back.up,nz.back.finished],[-2,true]);
+eq("ナッソー：合計 AS", [nz.total.up,nz.total.finished],[0,true]);
+const sN2={a:{},b:{}}; for(let h=1;h<=7;h++){sN2.a[h]=4;sN2.b[h]=(h<=5)?5:4;}         // 前半：5Hで5UP（残り4）→ 5&4 で成立
+nz=C.calculateNassau(A,B,holes,sN2,false);
+eq("ナッソー前半：9ホール基準で早期成立 5&4", [nz.front.closed,nz.front.label,nz.front.thru],[true,"5&4",5]);
+eq("ナッソー後半：未対戦", nz.back.thru,0);
+eq("18Hマッチ側は成立しない（残り13）", nz.total.closed,false);
+const nzAll=C.calculateAllNassau(mk(4),holes,{},false);
+eq("ナッソー総当たり：4人=6ペア×3勝負=18", [nzAll.length,C.flattenNassau(nzAll).length],[6,18]);
+/* スキンズ */
+const SK=mk(3); const sk={p0:{1:4,2:4,3:5},p1:{1:5,2:4,3:4},p2:{1:5,2:4}};   // 1H p0単独→1スキン、2H 全員同点→持越し、3H p2未入力→保留
+let skr=C.calculateSkins(SK,holes,sk,false);
+eq("スキンズ：1H p0 獲得", [skr.rows[0].winner.id,skr.rows[0].skins],["p0",1]);
+eq("スキンズ：2H 同点は持ち越し（carry=1）", [skr.rows[1].winner,skr.carry],[null,1]);
+eq("スキンズ：未入力者がいるホールは保留", skr.rows[2].pending,true);
+sk.p2[3]=4;  skr=C.calculateSkins(SK,holes,sk,false);                          // 3H p1,p2 が4で同点 → さらに持越し carry=2
+eq("スキンズ：3H も同点で carry=2", skr.carry,2);
+sk.p0[4]=3;sk.p1[4]=4;sk.p2[4]=4; skr=C.calculateSkins(SK,holes,sk,false);   // 4H p0 単独 → 持越し2＋1＝3スキン
+eq("スキンズ：持ち越し込みで3スキン獲得", [skr.rows[3].skins,skr.totals.p0,skr.carry],[3,4,0]);
+eq("スキンズ順位：p0 1位", skr.ranking.map(r=>[r.player.id,r.skins,r.rank]),[["p0",4,1],["p1",0,2],["p2",0,2]]);
+/* スキンズ：ハンデ戦はネットで判定（B は 1H(hcp7) で1打） */
+const A5=Object.assign({},A,{handicap:5});   // 1H(hcp7)：A5は打なし、B(16)は1打 → 4 vs 5-1=4 で同点
+const skH=C.calculateSkins([A5,B],holes,{a:{1:4},b:{1:5}},true);
+eq("スキンズ：個人ハンデ込みで同点→持越し", [skH.rows[0].winner,skH.carry],[null,1]);
 out.insertAdjacentHTML("afterbegin",`<h3 class="${fail?"ng":"ok"}">結果：${pass} 件成功 / ${fail} 件失敗</h3>`);
 window.__testResult={pass,fail};
 </script>
