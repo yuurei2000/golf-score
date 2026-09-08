@@ -364,7 +364,7 @@ async function openGame(id,r){
 function canInput(){ return role.kind==="admin"||role.kind==="scorer"; }
 function renderTabs(){
   const t=[["my","🎯","マイマッチ"],["all","⚔","全マッチ"],["rank","🏆","ランキング"],["score","📋","スコア表"]];
-  if(canInput())t.push(["input","✏️","入力"]);
+  if(canInput()&&G.status!=="finished")t.push(["input","✏️","入力"]);
   $("tabs").innerHTML=t.map(([k,ic,l])=>`<button class="${tab===k?"on":""}" onclick="tab='${k}';openMatch=null;renderGame()"><span class="ic">${ic}</span>${l}</button>`).join("");
   $("tabs").classList.add("show");
 }
@@ -373,13 +373,14 @@ function renderGame(){
   const mePl=G.players.find(p=>p.id===me);
   const head=`<div class="card" style="padding:10px 14px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <div><div style="font-weight:800;">${esc(G.course.name)}</div><div class="small">${esc(G.playDate)}　${hcpModeLabel(G)}　${G.players.length}人・${G.groups.length}組${G.startSide==="in"?`・${esc((G.course.courseNames||[])[1]||"IN")}スタート`:""} <span class="pill ${role.kind==="viewer"?"":"prim"}">${role.kind==="admin"?"管理者":role.kind==="scorer"?`${role.groupNo}組 入力担当`:"閲覧"}</span>${Store.mode==="firebase"?(G.__pending?` <span class="pill lose">未同期（送信待ち）</span>`:` <span class="pill win">同期済</span>`):""}</div></div>
+      <div><div style="font-weight:800;">${esc(G.course.name)}</div><div class="small">${esc(G.playDate)}　${hcpModeLabel(G)}　${G.players.length}人・${G.groups.length}組${G.startSide==="in"?`・${esc((G.course.courseNames||[])[1]||"IN")}スタート`:""} <span class="pill ${role.kind==="viewer"?"":"prim"}">${role.kind==="admin"?"管理者":role.kind==="scorer"?`${role.groupNo}組 入力担当`:"閲覧"}</span>${Store.mode==="firebase"?(G.__pending?` <span class="pill lose">未同期（送信待ち）</span>`:` <span class="pill win">同期済</span>`):""}${G.status==="finished"?` <span class="pill" style="background:#16202a;color:#fff;">ゲーム終了</span>`:""}</div></div>
       <div style="display:flex;gap:6px;flex:0 0 auto;">
         <button class="opt" style="min-height:40px;padding:6px 10px;font-size:13px;" onclick="askWho()">${mePl?esc(mePl.name):"あなたは？"}</button>
         <button class="opt" style="min-height:40px;min-width:40px;padding:6px 8px;font-size:13px;" onclick="showQr()" title="参加QR">QR</button>
         <button class="opt" style="min-height:44px;min-width:48px;padding:2px 8px;font-size:26px;line-height:1;" onclick="leaveGame()" title="ホームへ">⌂</button>
       </div>
     </div></div>`;
+  if(tab==="input"&&G.status==="finished")tab="rank";   // 終了後は入力不可
   let body="";
   if(tab==="my")body=renderMy(mePl);
   else if(tab==="all")body=renderAll();
@@ -554,13 +555,24 @@ function showQr(){
   document.body.appendChild(m);
   try{ new QRCode(m.querySelector("#qr2"),{text:vUrl,width:200,height:200}); }catch(_){ m.querySelector("#qr2").innerHTML=`<div class="small">QR生成不可（オフライン）</div>`; }
 }
+async function setGameStatus(status){
+  const msg=status==="finished"?"ゲームを終了しますか？\n順位を確定し、スコア入力を締め切ります（あとから再開できます）。":"ゲームを再開しますか？\nスコア入力が再び可能になります。";
+  if(!confirm(msg))return;
+  try{ await Store.setStatus(gameId,status); toast(status==="finished"?"ゲームを終了しました":"ゲームを再開しました"); }
+  catch(e){ toast("変更できません："+(e.code==="permission-denied"?"権限がありません（管理者用URLで開いてください）":e.message)); }
+}
 function leaveGame(){ if(confirm("ゲーム画面を閉じてホームに戻りますか？\n（データは保存されています。URLやホームの一覧から再度開けます）"))location.hash="#/"; }
 function renderRank(){
   const st=MatchCore.calculatePlayerStandings(G.players,allMatches());
-  return `<div class="card"><h2>${st.provisional?"暫定順位":"最終順位"}</h2>
+  const finished=G.status==="finished";
+  const adminBtns=role.kind==="admin"?(finished
+    ?`<button class="btn gray sm" onclick="setGameStatus('playing')">ゲームを再開する（入力を再び可能にする）</button>`
+    :`<button class="btn sm" style="background:#16202a;" onclick="setGameStatus('finished')">ゲーム終了（順位を確定して入力を締める）</button>`):"";
+  return `<div class="card"><h2>${finished?"最終順位（確定）":st.provisional?"暫定順位":"最終順位"}</h2>${finished&&st.provisional?`<div class="small" style="color:var(--warn);">※未成立のマッチは終了時点の状況で集計しています</div>`:""}
     <table><tr><th>順位</th><th>Player</th><th>W</th><th>D</th><th>L</th><th>±</th></tr>
     ${st.rows.map(r=>`<tr class="${r.player.id===me?"":""}" style="${r.player.id===me?"background:var(--primary2);":""}"><td class="${r.rank===1?"rank1":""}" style="font-weight:800;">${r.rank}</td><td class="l">${esc(r.player.name)}<span class="small"> ${r.player.groupNo}組</span></td><td style="color:var(--win);font-weight:800;">${r.w}</td><td>${r.d}</td><td style="color:var(--lose);">${r.l}</td><td>${r.upSum>0?"+":""}${r.upSum}</td></tr>`).join("")}</table>
-    <div class="small" style="margin-top:6px;">順位＝勝利数 → 引き分け数 → 全マッチのUP/DOWN合計。${st.provisional?"未成立のマッチは現在の状況で暫定集計しています。":"全マッチ成立済みです。"}</div></div>`;
+    <div class="small" style="margin-top:6px;">順位＝勝利数 → 引き分け数 → 全マッチのUP/DOWN合計。${st.provisional?"未成立のマッチは現在の状況で暫定集計しています。":"全マッチ成立済みです。"}</div>
+    ${adminBtns}</div>`;
 }
 let scoreMode="gross";   // ホール別の表示：gross＝グロス／net＝HDCP込み（ネット）
 function renderScoreTab(){

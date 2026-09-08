@@ -20,6 +20,14 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ゲーム状態（終了／再開）：閲覧は自由。書き込みは管理者トークンを持つ人だけ
+      match /state/main {
+        allow read: if true;
+        allow create, update: if request.resource.data.tok is string
+          && request.resource.data.tok == get(/databases/$(database)/documents/games/$(gameId)/private/tokens).data.adminToken;
+        allow delete: if false;
+      }
+
       // 組ごとのスコア：閲覧は自由。書き込みはその組の担当者トークンか管理者トークンを持つ人だけ
       match /scores/{groupNo} {
         allow read: if true;

@@ -67,6 +67,8 @@ window.FirebaseStore = function (cfg) {
       const d = await gameRef(id).get(); if (!d.exists) return null;
       const sc = await gameRef(id).collection("scores").get();
       const g = assemble(d.data(), sc.docs);
+      const stDoc = await gameRef(id).collection("state").doc("main").get();
+      if (stDoc.exists) { g.status = stDoc.data().status || g.status; g.finishedAt = stDoc.data().finishedAt || null; }
       indexPut({ gameId: id, playDate: g.playDate, courseName: g.course.name, playerNames: g.players.map(p => p.name),
         handicapEnabled: g.handicapEnabled, status: g.status, createdAt: g.createdAt || Date.now() });
       return g;
@@ -77,6 +79,11 @@ window.FirebaseStore = function (cfg) {
         handicapEnabled: e.handicapEnabled, status: e.status, adminToken: e.adminToken || null }));
     },
     async updateGame() { throw new Error("ゲーム設定の変更はフェーズ2では未対応です"); },
+    async setStatus(gameId, status) {   // 管理者のみ（ルールで adminToken を検証）
+      if (!cred.token) throw new Error("管理者用URLで開いてください");
+      await gameRef(gameId).collection("state").doc("main").set({ tok: cred.token, status, finishedAt: status === "finished" ? Date.now() : null, updatedAt: Date.now() }, { merge: true });
+      const idx = load(K_INDEX, {}); if (idx[gameId]) { idx[gameId].status = status; save(K_INDEX, idx); }
+    },
     async deleteGame(id) { const idx = load(K_INDEX, {}); delete idx[id]; save(K_INDEX, idx); },   // この端末の一覧から外すだけ
 
     async setScores(gameId, items) {
@@ -102,12 +109,18 @@ window.FirebaseStore = function (cfg) {
         { tok: cred.token, scores: { [playerId]: { [String(holeNo)]: firebase.firestore.FieldValue.delete() } }, updatedAt: Date.now() }, { merge: true });
     },
     subscribeGame(gameId, cb) {
-      let gameDoc = null, scoreDocs = [], pending = false;
-      const emit = () => { if (!gameDoc) return; const g = assemble(JSON.parse(JSON.stringify(gameDoc)), scoreDocs); g.__pending = pending; cb(g); };
+      let gameDoc = null, scoreDocs = [], pending = false, stateDoc = null;
+      const emit = () => {
+        if (!gameDoc) return;
+        const g = assemble(JSON.parse(JSON.stringify(gameDoc)), scoreDocs);
+        if (stateDoc) { g.status = stateDoc.status || g.status; g.finishedAt = stateDoc.finishedAt || null; }
+        g.__pending = pending; cb(g);
+      };
+      const u3 = gameRef(gameId).collection("state").doc("main").onSnapshot(d => { stateDoc = d.exists ? d.data() : null; emit(); }, e => console.error(e));
       const u1 = gameRef(gameId).onSnapshot(d => { gameDoc = d.exists ? d.data() : null; if (!gameDoc) { cb(null); return; } emit(); }, e => console.error(e));
       const u2 = gameRef(gameId).collection("scores").onSnapshot({ includeMetadataChanges: true },
         s => { scoreDocs = s.docs; pending = s.metadata.hasPendingWrites; emit(); }, e => console.error(e));
-      return () => { u1(); u2(); };
+      return () => { u1(); u2(); u3(); };
     }
   };
 };
