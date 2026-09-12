@@ -357,6 +357,7 @@ function renderShare(g){
 }
 
 /* ============ ゲーム画面 ============ */
+let Graw=null, evalMode="orig";   // 評価の切替：orig＝当初のHCP／alt＝最終グロスで見直した再評価（両方のデータを保持）
 let G=null, role={kind:"viewer"}, me=null, tab="my", inputHole=1, inputGroup=1, inputVals={}, openMatch=null, gameId=null;
 async function openGame(id,r){
   gameId=id; role=r; tab="my"; openMatch=null;
@@ -376,7 +377,8 @@ async function openGame(id,r){
   if(role.kind==="scorer"&&!me){me=g.groups.find(x=>x.groupNo===role.groupNo).scorerPlayerId;Store.Identity.set(id,me);}
   inputGroup=role.kind==="scorer"?role.groupNo:1;
   inputHole=MatchCore.playOrder(g.startSide||"out")[0]; inputVals={};
-  unsub=Store.subscribeGame(id,game=>{ if(!game)return; if(game.status==="deleted"){ if(unsub){unsub();unsub=null;} $("tabs").classList.remove("show"); $("app").innerHTML=`<div class="card"><h2>このゲームは削除されました</h2><button class="btn gray" onclick="location.hash='#/'">ホームへ</button></div>`; return; } G=game; if(!G.scores)G.scores={}; renderGame(); });
+  try{ evalMode=localStorage.getItem("gm_eval_"+id)||"orig"; }catch(_){ evalMode="orig"; }
+  unsub=Store.subscribeGame(id,game=>{ if(!game)return; if(game.status==="deleted"){ if(unsub){unsub();unsub=null;} $("tabs").classList.remove("show"); $("app").innerHTML=`<div class="card"><h2>このゲームは削除されました</h2><button class="btn gray" onclick="location.hash='#/'">ホームへ</button></div>`; return; } Graw=game; if(!Graw.scores)Graw.scores={}; applyEval(); renderGame(); });
 }
 function canInput(){ return role.kind==="admin"||role.kind==="scorer"; }
 function renderTabs(){
@@ -390,7 +392,8 @@ function renderGame(){
   const mePl=G.players.find(p=>p.id===me);
   const head=`<div class="card" style="padding:10px 14px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <div><div style="font-weight:800;">${esc(G.course.name)}</div><div class="small">${esc(G.playDate)}　${hcpModeLabel(G)}・${formatLabel()}＋スキンズ　${G.players.length}人・${G.groups.length}組${G.startSide==="in"?`・${esc((G.course.courseNames||[])[1]||"IN")}スタート`:""} <span class="pill ${role.kind==="viewer"?"":"prim"}">${role.kind==="admin"?"管理者":role.kind==="scorer"?`${role.groupNo}組 入力担当`:"閲覧"}</span>${Store.mode==="firebase"?(G.__pending?` <span class="pill lose">未同期（送信待ち）</span>`:` <span class="pill win">同期済</span>`):""}${G.status==="finished"?` <span class="pill" style="background:#16202a;color:#fff;">ゲーム終了</span>`:""}</div></div>
+      <div><div style="font-weight:800;">${esc(G.course.name)}</div><div class="small">${esc(G.playDate)}　${hcpModeLabel(G)}・${formatLabel()}＋スキンズ　${G.players.length}人・${G.groups.length}組${G.startSide==="in"?`・${esc((G.course.courseNames||[])[1]||"IN")}スタート`:""} <span class="pill ${role.kind==="viewer"?"":"prim"}">${role.kind==="admin"?"管理者":role.kind==="scorer"?`${role.groupNo}組 入力担当`:"閲覧"}</span>${Store.mode==="firebase"?(G.__pending?` <span class="pill lose">未同期（送信待ち）</span>`:` <span class="pill win">同期済</span>`):""}${G.status==="finished"?` <span class="pill" style="background:#16202a;color:#fff;">ゲーム終了</span>`:""}</div>
+      ${Graw&&Graw.alt?`<div class="grid" style="margin-top:6px;gap:4px;"><button class="opt ${evalMode!=="alt"?"sel":""}" style="min-height:34px;padding:4px 10px;font-size:13px;" onclick="setEvalMode('orig')">当初の評価</button><button class="opt ${evalMode==="alt"?"sel":""}" style="min-height:34px;padding:4px 10px;font-size:13px;" onclick="setEvalMode('alt')">🎲 再評価（最終グロスHCP）</button></div>`:""}</div>
       <div style="display:flex;gap:6px;flex:0 0 auto;">
         <button class="opt" style="min-height:40px;padding:6px 10px;font-size:13px;" onclick="askWho()">${mePl?esc(mePl.name):"あなたは？"}</button>
         <button class="opt" style="min-height:40px;min-width:40px;padding:6px 8px;font-size:13px;" onclick="showQr()" title="参加QR">QR</button>
@@ -419,6 +422,30 @@ function askWho(){
   document.body.appendChild(m);
 }
 function chooseMe(pid){ me=pid; Store.Identity.set(gameId,pid); document.querySelectorAll(".modal").forEach(x=>x.remove()); renderGame(); }
+/* 評価モードを G に反映：再評価なら各プレイヤーのHCP・配分順位を差し替え、プレイヤー別ランダムのハンデ戦として計算 */
+function applyEval(){
+  if(!Graw)return;
+  const useAlt=evalMode==="alt"&&Graw.alt&&Graw.alt.handicaps;
+  if(!useAlt){ G=Graw; return; }
+  G=Object.assign({},Graw,{ handicapEnabled:true, hcpMode:"randomPlayer",
+    players:Graw.players.map(p=>Object.assign({},p,{handicap:Graw.alt.handicaps[p.id]??p.handicap, hcpRanks:Graw.alt.hcpRanks[p.id]||p.hcpRanks, origHandicap:p.handicap})) });
+}
+function setEvalMode(m){ evalMode=m; try{localStorage.setItem("gm_eval_"+gameId,m);}catch(_){ } applyEval(); openMatch=null; renderGame(); }
+/* 最終グロスでHCPを見直し、各自ランダム再配置で再評価（管理者・要望20260912） */
+async function reevaluateGame(){
+  const played=Graw.players.map(p=>Object.keys(Graw.scores[p.id]||{}).length);
+  const warn=played.some(n=>n<18)?"\n※18ホール入力が終わっていないプレイヤーがいます（入力済みホールで18H換算します）":"";
+  if(!confirm("最終グロスから各自のハンデを見直し（グロス−Par）、ホール配分を各自ランダムに引き直して再評価します。\n当初の評価はそのまま残り、切り替えて見られます。"+warn))return;
+  const rv=MatchCore.reevaluateHandicaps(Graw.players,Graw.course.holes,Graw.scores);
+  const alt={handicaps:rv.handicaps,hcpRanks:rv.hcpRanks,basis:rv.basis,createdAt:Date.now()};
+  try{ await Store.setAlt(gameId,alt); Graw.alt=alt; setEvalMode("alt"); toast("再評価しました"); }
+  catch(e){ toast("再評価できません："+(e.code==="permission-denied"?"権限がありません（管理者用URLで開いてください）":e.message)); }
+}
+async function clearReeval(){
+  if(!confirm("再評価データを削除して当初の評価だけに戻しますか？"))return;
+  try{ await Store.setAlt(gameId,null); Graw.alt=null; setEvalMode("orig"); toast("再評価を削除しました"); }
+  catch(e){ toast("削除できません："+e.message); }
+}
 function perPlayer(){ return G.hcpMode==="randomPlayer"; }
 function isNassau(){ return G.format==="nassau"; }
 function formatLabel(){ return isNassau()?"ナッソー":"18Hマッチ"; }
@@ -431,7 +458,7 @@ function skinsResult(){ return MatchCore.calculateSkins(sortedPlayers(),G.course
 function nassauIcons(pr,sign){
   return [["前",pr.front],["後",pr.back],["計",pr.total]].map(([lb,sm])=>`<div style="font-size:14px;white-space:nowrap;"><span class="small" style="display:inline-block;width:1.2em;">${lb}</span>${upIcons(sm.up*sign,sm)}</div>`).join("");
 }
-function hcpModeLabel(g){ return !g.handicapEnabled?"スクラッチ戦":g.hcpMode==="random"?"🎲ハンデ戦(ランダム)":g.hcpMode==="randomPlayer"?"🎲🎲ハンデ戦(プレイヤー別ランダム)":"ハンデ戦"; }
+function hcpModeLabel(g){ if(evalMode==="alt"&&Graw&&Graw.alt)return "🎲再評価（最終グロスHCP・各自ランダム配分）"; return !g.handicapEnabled?"スクラッチ戦":g.hcpMode==="random"?"🎲ハンデ戦(ランダム)":g.hcpMode==="randomPlayer"?"🎲🎲ハンデ戦(プレイヤー別ランダム)":"ハンデ戦"; }
 /* 個人ハンデ基準のこのホールの打数（プレイヤー別ランダムでは各自の順位表を使用） */
 function allowFor(p,h){ return MatchCore.personalAllowance(p.handicap,MatchCore.holeRankFor(p,h,perPlayer()),G.handicapEnabled); }
 function holeOrder(){ return (G.holeOrder&&G.holeOrder.length===18)?G.holeOrder:MatchCore.playOrder(G.startSide||"out"); }
@@ -600,11 +627,16 @@ function renderRank(){
   const adminBtns=role.kind==="admin"?(finished
     ?`<button class="btn gray sm" onclick="setGameStatus('playing')">ゲームを再開する（入力を再び可能にする）</button>`
     :`<button class="btn sm" style="background:#16202a;" onclick="setGameStatus('finished')">ゲーム終了（順位を確定して入力を締める）</button>`)
+    +`<button class="btn sm light" style="margin-top:10px;" onclick="reevaluateGame()">🎲 最終グロスでHCPを見直して再評価（ランダム再配置）</button>`
+    +(Graw&&Graw.alt?`<button class="btn sm gray" onclick="clearReeval()">再評価データを削除</button>`:"")
     +`<button class="btn sm danger" style="margin-top:10px;" onclick="deleteGameAsAdmin(gameId,role.token)">このゲームを削除</button>`:"";
   return `<div class="card"><h2>${formatLabel()}　${finished?"最終順位（確定）":st.provisional?"暫定順位":"最終順位"}</h2>${finished&&st.provisional?`<div class="small" style="color:var(--warn);">※未成立のマッチは終了時点の状況で集計しています</div>`:""}
     <table><tr><th>順位</th><th>Player</th><th>W</th><th>D</th><th>L</th><th>±</th></tr>
     ${st.rows.map(r=>`<tr class="${r.player.id===me?"":""}" style="${r.player.id===me?"background:var(--primary2);":""}"><td class="${r.rank===1?"rank1":""}" style="font-weight:800;">${r.rank}</td><td class="l">${esc(r.player.name)}<span class="small"> ${r.player.groupNo}組</span></td><td style="color:var(--win);font-weight:800;">${r.w}</td><td>${r.d}</td><td style="color:var(--lose);">${r.l}</td><td>${r.upSum>0?"+":""}${r.upSum}</td></tr>`).join("")}</table>
     <div class="small" style="margin-top:6px;">順位＝勝利数 → 引き分け数 → 全マッチのUP/DOWN合計${isNassau()?"（前半・後半・合計を1勝負ずつ数えます）":""}。${st.provisional?"未成立のマッチは現在の状況で暫定集計しています。":"全マッチ成立済みです。"}</div>
+    ${evalMode==="alt"&&Graw&&Graw.alt?`<h3>再評価のHCP（最終グロス − Par を18H換算）</h3><table><tr><th>Player</th><th>グロス</th><th>Par</th><th>当初HCP</th><th>再評価HCP</th></tr>
+      ${G.players.map(p=>{const b=(Graw.alt.basis||{})[p.id]||{};return `<tr><td class="l">${esc(p.name)}</td><td>${b.gross??"-"}${b.played&&b.played<18?`<span class="small">(${b.played}H)</span>`:""}</td><td>${b.par??"-"}</td><td>${p.origHandicap}</td><td style="font-weight:800;color:var(--primary);">${p.handicap}</td></tr>`;}).join("")}</table>
+      <div class="small" style="margin-top:4px;">各自のハンデは自分専用のランダム順位で配分（ハンデ配分表で確認できます）。対戦は各自のネット同士で勝負。</div>`:""}
     ${adminBtns}</div>${renderSkinsRank()}`;
 }
 let scoreMode="gross";   // ホール別の表示：gross＝グロス／net＝HDCP込み（ネット）

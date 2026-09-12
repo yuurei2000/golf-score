@@ -159,6 +159,24 @@ const MatchCore = (() => {
     return { rows, totals, carry, played, ranking: rankRows };
   }
 
+  /* ---- 再評価（要望20260912）：最終グロスからハンデを見直し、各自ランダムにホール配分する ----
+     新HCP ＝ (グロス − プレー済みホールのPar合計) を18ホール換算して四捨五入（下限0）。
+     配分は各プレイヤー別のランダム順位（前後半交互）。戻り値：{ handicaps:{pid:hcp}, hcpRanks:{pid:{holeNo:rank}}, basis:{pid:{gross,par,played}} } */
+  function reevaluateHandicaps(players, holes, scores, rng) {
+    const handicaps = {}, hcpRanks = {}, basis = {};
+    players.forEach(p => {
+      const s = (scores && scores[p.id]) || {};
+      let gross = 0, par = 0, played = 0;
+      holes.forEach(h => { if (s[h.no] != null) { gross += s[h.no]; par += h.par; played++; } });
+      const hcp = played ? Math.max(0, Math.round((gross - par) * 18 / played)) : 0;
+      handicaps[p.id] = hcp;
+      const order = randomHcpOrder(rng); const ranks = {}; order.forEach((rank, i) => { ranks[String(i + 1)] = rank; });
+      hcpRanks[p.id] = ranks;
+      basis[p.id] = { gross, par, played };
+    });
+    return { handicaps, hcpRanks, basis };
+  }
+
   /* ---- 順位（§22・§23）----
      W/D/L は成立済みは確定値、未成立は現在のリード状態で暫定集計。
      順位キー：勝利数 → 引分数 → 全マッチのUP/DOWN合計。未成立が1つでもあれば provisional=true */
@@ -247,7 +265,7 @@ const MatchCore = (() => {
 
 
   return { calculateStrokeAllowance, calculateNetScore, calculateHoleResult, calculateMatchStatus,
-    calculateAllMatches, calculateNassau, calculateAllNassau, flattenNassau, calculateSkins,
+    calculateAllMatches, calculateNassau, calculateAllNassau, flattenNassau, calculateSkins, reevaluateHandicaps,
     calculatePlayerStandings, matchLabel, strokeSummary, personalAllowance, holeRankFor, matchAllowance,
     randomHcpOrder, playOrder, validateCourse };
 })();

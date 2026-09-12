@@ -75,7 +75,7 @@ window.FirebaseStore = function (cfg) {
       const sc = await gameRef(id).collection("scores").get();
       const g = assemble(d.data(), sc.docs);
       const stDoc = await gameRef(id).collection("state").doc("main").get();
-      if (stDoc.exists) { g.status = stDoc.data().status || g.status; g.finishedAt = stDoc.data().finishedAt || null; }
+      if (stDoc.exists) { g.status = stDoc.data().status || g.status; g.finishedAt = stDoc.data().finishedAt || null; g.alt = stDoc.data().alt || null; }
       indexPut({ gameId: id, playDate: g.playDate, courseName: g.course.name, playerNames: g.players.map(p => p.name),
         handicapEnabled: g.handicapEnabled, status: g.status, createdAt: g.createdAt || Date.now() });
       return g;
@@ -92,6 +92,10 @@ window.FirebaseStore = function (cfg) {
       const idx = load(K_INDEX, {}); if (idx[gameId]) { idx[gameId].status = status; save(K_INDEX, idx); }
     },
     async deleteGame(id) { const idx = load(K_INDEX, {}); delete idx[id]; save(K_INDEX, idx); },   // この端末の一覧から外すだけ
+    async setAlt(gameId, alt) {   // 再評価データ（管理者のみ。state/main に保存し全端末へ配信）
+      if (!cred.token) throw new Error("管理者用URLで開いてください");
+      await gameRef(gameId).collection("state").doc("main").set({ tok: cred.token, alt: alt || null, updatedAt: Date.now() }, { merge: true });
+    },
 
     async setScores(gameId, items) {
       if (!cred.token) throw new Error("入力権限がありません。担当者用URLまたは管理者用URLで開いてください");
@@ -120,7 +124,7 @@ window.FirebaseStore = function (cfg) {
       const emit = () => {
         if (!gameDoc) return;
         const g = assemble(JSON.parse(JSON.stringify(gameDoc)), scoreDocs);
-        if (stateDoc) { g.status = stateDoc.status || g.status; g.finishedAt = stateDoc.finishedAt || null; }
+        if (stateDoc) { g.status = stateDoc.status || g.status; g.finishedAt = stateDoc.finishedAt || null; g.alt = stateDoc.alt || null; }
         g.__pending = pending; cb(g);
       };
       const u3 = gameRef(gameId).collection("state").doc("main").onSnapshot(d => { stateDoc = d.exists ? d.data() : null; emit(); }, e => console.error(e));

@@ -169,6 +169,15 @@ eq("スキンズ順位：p0 1位", skr.ranking.map(r=>[r.player.id,r.skins,r.ran
 const A5=Object.assign({},A,{handicap:5});   // 1H(hcp7)：A5は打なし、B(16)は1打 → 4 vs 5-1=4 で同点
 const skH=C.calculateSkins([A5,B],holes,{a:{1:4},b:{1:5}},true);
 eq("スキンズ：個人ハンデ込みで同点→持越し", [skH.rows[0].winner,skH.carry],[null,1]);
+/* 再評価：最終グロスからHCPを見直し（18H換算・下限0）、各自ランダム配分 */
+const RV=[{id:"r1",name:"R1",handicap:5,displayOrder:1},{id:"r2",name:"R2",handicap:20,displayOrder:2}];
+const rvSc={r1:{},r2:{}}; for(let h=1;h<=18;h++){rvSc.r1[h]=holes[h-1].par+1;rvSc.r2[h]=holes[h-1].par-0;}   // R1 +18, R2 ±0
+let rv=C.reevaluateHandicaps(RV,holes,rvSc,()=>0.5);
+eq("再評価HCP：+18→18、±0→0", [rv.handicaps.r1,rv.handicaps.r2],[18,0]);
+eq("再評価：配分は1〜18の順位表", Object.values(rv.hcpRanks.r1).sort((a,b)=>a-b),Array.from({length:18},(_,i)=>i+1));
+const rvSc9={r1:{},r2:{}}; for(let h=1;h<=9;h++){rvSc9.r1[h]=holes[h-1].par+1;rvSc9.r2[h]=holes[h-1].par-1;}   // 9H時点 +9 / -9
+rv=C.reevaluateHandicaps(RV,holes,rvSc9);
+eq("再評価HCP：9H換算（+9→18、-9→0）", [rv.handicaps.r1,rv.handicaps.r2,rv.basis.r1.played],[18,0,9]);
 out.insertAdjacentHTML("afterbegin",`<h3 class="${fail?"ng":"ok"}">結果：${pass} 件成功 / ${fail} 件失敗</h3>`);
 window.__testResult={pass,fail};
 </script>

@@ -64,6 +64,7 @@ const Store = (() => {
     async updateGame(gameId, patch) { const g = getGameSync(gameId); if (!g) return null; Object.assign(g, patch); putGame(g); return g; },
     async deleteGame(gameId) { const games = load(K_GAMES, {}); delete games[gameId]; save(K_GAMES, games); },
     async setStatus(gameId, status) { const g = getGameSync(gameId); if (!g) return; g.status = status; g.finishedAt = status === "finished" ? Date.now() : null; putGame(g); },
+    async setAlt(gameId, alt) { const g = getGameSync(gameId); if (!g) return; g.alt = alt || null; putGame(g); },
     async setScores(gameId, items) {
       const g = getGameSync(gameId); if (!g) throw new Error("game not found");
       items.forEach(({ playerId, holeNo, gross }) => {
