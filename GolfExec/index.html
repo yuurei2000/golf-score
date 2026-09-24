@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#1f7a4d">
+<link rel="manifest" href="manifest.json">
+<title>TrackMan 45分練習記録</title>
+<style>
+:root{--primary:#1f7a4d;--primary2:#e8f5ee;--text:#16202a;--sub:#667085;--line:#d0d5dd;--bg:#f6f7f8;--danger:#b42318;--warn:#b54708;--ok:#1f7a4d;--acc:#175cd3;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;background:var(--bg);color:var(--text);font-size:16px;padding-bottom:80px;}
+header{background:var(--primary);color:#fff;padding:12px 14px;position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;}
+header .ttl{font-weight:800;font-size:16px;}
+main{padding:12px;max-width:640px;margin:0 auto;overflow-x:hidden;}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(16,24,40,.04);overflow:hidden;min-width:0;}
+h2{font-size:17px;margin:0 0 8px;}
+h3{font-size:14px;margin:12px 0 6px;color:var(--primary);border-left:4px solid var(--primary);padding-left:8px;}
+label{display:block;font-size:13px;font-weight:700;color:var(--sub);margin:10px 0 4px;}
+input[type=text],input[type=number],textarea,select{width:100%;padding:10px 12px;font-size:16px;border:1.5px solid var(--line);border-radius:10px;background:#fff;}
+textarea{min-height:60px;}
+.small{font-size:12px;color:var(--sub);}
+.btn{display:block;width:100%;min-height:52px;padding:13px 14px;font-size:16px;font-weight:800;border:none;border-radius:14px;background:var(--primary);color:#fff;margin-top:8px;cursor:pointer;}
+.btn.light{background:var(--primary2);color:var(--primary);border:1.5px solid var(--primary);}
+.btn.gray{background:#eef0f3;color:#344054;}
+.btn.danger{background:var(--danger);}
+.btn.sm{min-height:40px;padding:8px;font-size:14px;margin-top:6px;}
+.btn:disabled{opacity:.45;}
+.row{display:flex;gap:8px;align-items:center;min-width:0;}
+.row>*{flex:1;}
+.grid{display:flex;flex-wrap:wrap;gap:7px;}
+.opt{min-width:56px;min-height:44px;padding:8px 12px;font-size:15px;font-weight:700;background:#fff;color:#344054;border:1.5px solid var(--line);border-radius:12px;cursor:pointer;position:relative;}
+.opt.sel{background:var(--primary2);border-color:var(--primary);color:var(--primary);}
+table{width:100%;border-collapse:collapse;font-size:14px;}
+th,td{border:1px solid #e4e7ec;padding:7px 5px;text-align:center;}
+th{background:#f2f4f7;font-weight:800;font-size:12px;}
+td.l{text-align:left;font-weight:700;}
+.wide{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:800;background:#eef0f3;color:#344054;}
+.pill.ok{background:#e6f4ea;color:var(--ok);} .pill.ng{background:#fde8e6;color:var(--danger);} .pill.prim{background:var(--primary2);color:var(--primary);}
+/* タイマー */
+.timerbar{display:flex;justify-content:space-between;align-items:center;background:#16202a;color:#fff;border-radius:14px;padding:10px 14px;margin-bottom:10px;}
+.timerbar .big{font-size:34px;font-weight:900;line-height:1;}
+.timerbar .lbl{font-size:11px;opacity:.8;}
+.timerbar.over .big.blk{color:#ffb020;}
+.prog{height:6px;background:#e4e7ec;border-radius:3px;overflow:hidden;margin-top:6px;}
+.prog>div{height:100%;background:var(--primary);}
+/* 評価ボタン */
+.score3{display:flex;gap:8px;margin:10px 0;}
+.score3 button{flex:1;min-height:92px;border:none;border-radius:16px;font-size:18px;font-weight:900;color:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;}
+.score3 .s2{background:var(--ok);} .score3 .s1{background:var(--warn);} .score3 .s0{background:var(--danger);}
+.score3 button .ic{font-size:28px;}
+.score3 button .pt{font-size:11px;opacity:.9;font-weight:700;line-height:1.25;padding:0 4px;}
+.shotlist{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+.chip{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:15px;}
+.chip.s2{background:var(--ok);} .chip.s1{background:var(--warn);} .chip.s0{background:var(--danger);} .chip.e{background:#e4e7ec;color:#98a2b3;}
+.banner{background:#fffaeb;border:1.5px solid #f9dbaf;border-radius:12px;padding:10px 12px;margin:8px 0;font-weight:800;color:var(--warn);}
+.kpi{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.kpi>div{background:#f9fafb;border-radius:12px;padding:10px;}
+.kpi .v{font-size:24px;font-weight:900;} .kpi .k{font-size:11px;color:var(--sub);font-weight:700;}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.cal>div{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;font-size:12px;background:#f9fafb;}
+.cal>div.has{background:var(--primary2);color:var(--primary);font-weight:800;cursor:pointer;} .cal>div.today{outline:2px solid var(--primary);}
+.cal>div.hd{background:none;color:var(--sub);font-weight:700;aspect-ratio:auto;padding:2px 0;}
+#tabs{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);display:flex;z-index:20;}
+#tabs button{flex:1;padding:8px 2px 10px;border:none;background:none;font-size:11px;font-weight:800;color:var(--sub);}
+#tabs button .ic{display:block;font-size:20px;} #tabs button.on{color:var(--primary);}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:76px;background:#16202a;color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;font-weight:700;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;}
+.toast.show{opacity:1;}
+.numgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+.numgrid input{padding:8px;font-size:15px;}
+.bar{display:flex;align-items:flex-end;gap:3px;height:90px;border-bottom:1px solid var(--line);padding:0 2px;}
+.bar>div{flex:1;background:var(--primary);border-radius:3px 3px 0 0;position:relative;min-width:6px;}
+.bar>div.ng{background:var(--danger);} .bar>div span{position:absolute;top:-16px;left:0;right:0;text-align:center;font-size:10px;font-weight:700;color:var(--sub);}
+.err{color:var(--danger);font-size:13px;font-weight:700;margin-top:6px;}
+</style>
+</head>
+<body>
+<header><span class="ttl" onclick="location.hash='#/'">⛳ TrackMan 45分練習記録</span><span class="small" id="hdRight" style="color:#fff;"></span></header>
+<main id="app"></main>
+<nav id="tabs"></nav>
+<div class="toast" id="toast"></div>
+
+<script src="practice-core.js"></script>
+<script src="store.js"></script>
+<script>
+/* ============ 共通 ============ */
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $=id=>document.getElementById(id);
+const todayStr=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
+let toastT=null; function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),1800);}
+const C=PracticeCore; let settings=Store.getSettings(); let menu=C.buildMenu(settings);
+const unit=()=>settings.unit==="m"?"m":"yd";
+/* 通知（音・振動） */
+let actx=null;
+function beep(n){ if(!settings.sound)return; try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); for(let i=0;i<(n||2);i++){const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.frequency.value=880;g.gain.value=.2;const t=actx.currentTime+i*.25;o.start(t);o.stop(t+.15);} }catch(_){ } }
+function buzz(){ if(settings.vibrate&&navigator.vibrate)try{navigator.vibrate([200,100,200]);}catch(_){ } }
+/* PWA */
+if("serviceWorker" in navigator&&location.protocol!=="file:"){ window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{})); }
+
+/* ============ ルーター ============ */
+function route(){
+  settings=Store.getSettings(); menu=C.buildMenu(settings);
+  const p=location.hash.replace(/^#\/?/,"").split("/").filter(Boolean);
+  renderTabs(p[0]||"home");
+  if(!p.length)return renderHome();
+  if(p[0]==="run")return renderRun();
+  if(p[0]==="history")return renderHistory(p[1]);
+  if(p[0]==="session"&&p[1])return renderSession(p[1]);
+  if(p[0]==="analysis")return renderAnalysis(p[1]);
+  if(p[0]==="settings")return renderSettings();
+  renderHome();
+}
+window.addEventListener("hashchange",route);
+function renderTabs(cur){
+  const t=[["home","🏠","ホーム","#/"],["history","📅","履歴","#/history"],["analysis","📈","分析","#/analysis"],["settings","⚙️","設定","#/settings"]];
+  $("tabs").innerHTML=t.map(([k,ic,l,h])=>`<button class="${cur===k||(k==="home"&&cur==="run")?"on":""}" onclick="location.hash='${h}'"><span class="ic">${ic}</span>${l}</button>`).join("");
+}
+
+/* ============ ホーム（§5.1） ============ */
+function renderHome(){
+  stopTick();
+  const run=Store.getRunning(); const sessions=Store.listSessions().filter(s=>s.status!=="running");
+  const last=sessions[0]; const ls=last?C.summarizeSession(last,menu):null;
+  const an=C.analyze(sessions,menu,30); const focus=C.focusOf(an); const st=C.streak(sessions,todayStr());
+  $("app").innerHTML=`
+    <div class="card">
+      ${run?`<div class="banner">中断中の練習があります（${esc(menu[run.blockIdx]?.name||"")}）</div><button class="btn" onclick="location.hash='#/run'">▶ 練習を再開する</button><button class="btn gray sm" onclick="discardRunning()">中断中の練習を破棄</button>`
+          :`<button class="btn" style="min-height:64px;font-size:19px;" onclick="startPractice()">▶ 今日の45分練習を開始</button>`}
+      <div class="small" style="margin-top:6px;">練習場所：${esc(settings.place||"")}　合計 ${C.totalMinutes(menu)}分・${menu.reduce((a,b)=>a+b.balls,0)}球</div>
+    </div>
+    <div class="card"><h2>直近の練習</h2>
+      ${last?`<div style="font-weight:800;">${esc(last.date)}　<span class="pill ${ls.rate>=70?"ok":""}">達成率 ${ls.rate}%</span> ${ls.test?`<span class="pill ${ls.test.pass?"ok":"ng"}">本番テスト ${ls.test.points}点</span>`:""}</div>
+        <div class="small">合格 ${ls.passed}/${ls.blocks}ブロック・致命的ミス ${ls.fatal}球・${ls.balls}球${ls.durationMin!=null?`・${ls.durationMin}分`:""}</div>
+        <button class="btn light sm" onclick="location.hash='#/session/${last.id}'">記録を見る・修正</button>`:`<div class="small">まだ記録はありません。</div>`}
+    </div>
+    <div class="card"><div class="kpi">
+      <div><div class="k">連続練習日数</div><div class="v">${st}<span style="font-size:13px;">日</span></div></div>
+      <div><div class="k">30日の平均達成率</div><div class="v">${an.avgRate!=null?an.avgRate+"%":"-"}</div></div></div>
+      <h3>今週の重点課題</h3>
+      ${focus?`<div><b>${esc(focus.name)}</b>：達成率 ${focus.passRate}%（${focus.sessions}回中）・致命的ミス率 ${focus.fatalRate}%</div><div class="small">${esc((menu.find(b=>b.id===focus.id)||{}).point||"")}</div>`:`<div class="small">記録が増えると、達成率が最も低いブロックを表示します。</div>`}
+    </div>`;
+}
+function discardRunning(){ if(!confirm("中断中の練習を破棄しますか？（記録は保存されません）"))return; Store.clearRunning(); renderHome(); }
+
+/* ============ 練習実行（§5.2〜5.4） ============ */
+let R=null, tick=null, numOpen=false;
+function newRun(){
+  const now=Date.now();
+  const session={id:Store.uid(),date:todayStr(),startedAt:now,endedAt:null,pausedMs:0,place:settings.place||"",status:"running",blocks:[],condition:"",fatigue:3,good:"",next:""};
+  const targets={}; menu.forEach(b=>{targets[b.id]=C.targetsFor(b,settings);});
+  return {session,blockIdx:0,phase:"run",targets,sessionTimer:{startedAt:now,pausedAt:null,pausedMs:0},blockTimer:{startedAt:now,pausedAt:null,pausedMs:0},notified:false,memo:""};
+}
+function startPractice(){ R=newRun(); ensureBlock(); persist(); location.hash="#/run"; }
+function persist(){ Store.saveRunning(R); }
+function curBlockDef(){ return menu[R.blockIdx]; }
+function ensureBlock(){
+  const b=curBlockDef(); let blk=R.session.blocks.find(x=>x.id===b.id);
+  if(!blk){ blk={id:b.id,idx:R.blockIdx,startedAt:Date.now(),endedAt:null,plannedSec:b.min*60,actualSec:null,club:"",shots:[],memo:""}; R.session.blocks.push(blk); }
+  return blk;
+}
+function curBlock(){ return R.session.blocks.find(x=>x.id===curBlockDef().id); }
+function renderRun(){
+  R=R||Store.getRunning();
+  if(!R){ $("app").innerHTML=`<div class="card"><div class="small">進行中の練習はありません。</div><button class="btn" onclick="startPractice()">今日の45分練習を開始</button></div>`; return; }
+  if(R.phase==="blockResult")return renderBlockResult();
+  if(R.phase==="end")return renderEnd();
+  const b=curBlockDef(), blk=ensureBlock(), sum=C.summarize(blk.shots), pass=C.judgeBlock(b,sum);
+  const tg=(R.targets[b.id]||[])[blk.shots.length]||b.dist;
+  const paused=!!R.blockTimer.pausedAt;
+  const tmFields={carry:"Carry",total:"Total",side:"Side(右+)",path:"Club Path",ftp:"Face to Path",speed:"Club Speed"};
+  const fields=(b.tm||["carry","side"]);
+  $("app").innerHTML=`
+    <div class="timerbar" id="timerbar">
+      <div><div class="lbl">全体残り</div><div class="big" id="tAll">--:--</div></div>
+      <div style="text-align:center;flex:1;padding:0 8px;"><div class="lbl">ブロック ${R.blockIdx+1}/${menu.length}</div><div style="font-weight:800;font-size:15px;">${esc(b.name)}</div><div class="prog"><div id="prog" style="width:0%"></div></div></div>
+      <div style="text-align:right;"><div class="lbl">ブロック残り</div><div class="big blk" id="tBlk">--:--</div></div>
+    </div>
+    <div id="overBanner"></div>
+    ${paused?`<div class="banner">⏸ 一時停止中</div>`:""}
+    <div class="card" style="padding:12px 14px;">
+      <div class="row" style="align-items:flex-start;"><div><div class="small">使用クラブ</div><b>${esc(b.club)}</b></div><div><div class="small">目標距離</div><b>${esc(tg)}</b></div><div style="flex:0 0 auto;text-align:right;"><div class="small">球数</div><b style="font-size:22px;">${blk.shots.length}<span class="small">/${b.balls}</span></b></div></div>
+      <div style="margin-top:6px;font-size:14px;">${esc(b.method)}</div>
+      <div style="margin-top:4px;font-size:14px;color:var(--primary);font-weight:800;">意識：${esc(b.point)}</div>
+    </div>
+    <div class="score3">
+      <button class="s2" onclick="addShot(2)"><span class="ic">○</span>成功<span class="pt">2点・${esc(b.ok2)}</span></button>
+      <button class="s1" onclick="addShot(1)"><span class="ic">△</span>許容<span class="pt">1点・${esc(b.ok1)}</span></button>
+      <button class="s0" onclick="addShot(0)"><span class="ic">×</span>致命的<span class="pt">0点・${esc(b.ok0)}</span></button>
+    </div>
+    <div class="card" style="padding:10px 14px;">
+      <div class="row"><div><span class="pill ok">成功 ${sum.s}</span> <span class="pill" style="background:#fff4e5;color:var(--warn);">許容 ${sum.ok}</span> <span class="pill ng">致命的 ${sum.fatal}</span></div><div style="flex:0 0 auto;"><span class="pill ${pass?"ok":""}">${pass?"合格ライン到達":"未達"}</span></div></div>
+      <div class="shotlist">${Array.from({length:Math.max(b.balls,blk.shots.length)},(_,i)=>{const s=blk.shots[i];return s?`<div class="chip s${s.score}" title="${esc(s.target||"")}">${s.score===2?"○":s.score===1?"△":"×"}</div>`:`<div class="chip e">${i+1}</div>`;}).join("")}</div>
+      ${blk.shots.length?`<div class="small" style="margin-top:6px;">直前の球のミス分類：</div><div class="grid" style="margin-top:4px;">${C.MISS_KINDS.map(k=>`<button class="opt ${blk.shots[blk.shots.length-1].miss===k?"sel":""}" style="min-height:36px;padding:4px 10px;font-size:13px;" onclick="setMiss('${k}')">${k}</button>`).join("")}</div>`:""}
+      <div class="row" style="margin-top:8px;"><button class="btn gray sm" onclick="undoShot()" ${blk.shots.length?"":"disabled"}>↶ 直前の球を取消</button><button class="btn light sm" onclick="numOpen=!numOpen;renderRun()">${numOpen?"数値を閉じる":"数値を追加"}</button></div>
+      ${numOpen?`<div class="small" style="margin-top:8px;">TrackManの数値（任意）。入力後に評価ボタンを押すとその球に付きます。「直前の球に反映」で登録済みの球にも付けられます。</div>
+        <div class="numgrid" style="margin-top:6px;">${fields.map(f=>`<input type="number" step="0.1" inputmode="decimal" id="n_${f}" placeholder="${tmFields[f]}" value="${R.pendingNum&&R.pendingNum[f]!=null?R.pendingNum[f]:""}" oninput="setPending('${f}',this.value)">`).join("")}</div>
+        <button class="btn light sm" onclick="applyNumToLast()" ${blk.shots.length?"":"disabled"}>直前の球に反映</button>`:""}
+    </div>
+    <div class="card" style="padding:10px 14px;">
+      <div class="row">
+        <button class="btn gray sm" onclick="togglePause()">${paused?"▶ 再開":"⏸ 一時停止"}</button>
+        <button class="btn gray sm" onclick="skipBlock()">ブロックをスキップ</button>
+        <button class="btn sm" onclick="endBlock()">${R.blockIdx===menu.length-1?"テスト終了":"次へ →"}</button>
+      </div>
+      <button class="btn danger sm" onclick="finishEarly()">練習を終了する</button>
+    </div>`;
+  startTick();
+}
+function setPending(f,v){ R.pendingNum=R.pendingNum||{}; R.pendingNum[f]=v===""?null:Number(v); persist(); }
+function takePending(){ const p=R.pendingNum||{}; R.pendingNum=null; const out={}; Object.keys(p).forEach(k=>{ if(p[k]!=null)out[k]=p[k]; }); return out; }
+function addShot(score){
+  const b=curBlockDef(), blk=ensureBlock();
+  if(R.blockTimer.pausedAt){ toast("一時停止中です。再開してから記録してください"); return; }
+  const tg=(R.targets[b.id]||[])[blk.shots.length]||b.dist;
+  blk.shots.push(Object.assign({n:blk.shots.length+1,club:blk.club||b.club,target:tg,score,at:Date.now()},takePending()));
+  persist(); renderRun();
+  if(blk.shots.length>=b.balls){ toast(`${b.balls}球完了。「次へ」で結果へ`); }
+}
+function undoShot(){ const blk=curBlock(); if(!blk.shots.length)return; blk.shots.pop(); persist(); renderRun(); toast("直前の球を取り消しました"); }
+function setMiss(k){ const blk=curBlock(); const s=blk.shots[blk.shots.length-1]; if(!s)return; s.miss=s.miss===k?"":k; persist(); renderRun(); }
+function applyNumToLast(){ const blk=curBlock(); const s=blk.shots[blk.shots.length-1]; if(!s)return; Object.assign(s,takePending()); persist(); renderRun(); toast("直前の球に数値を付けました"); }
+function togglePause(){ const now=Date.now(); if(R.blockTimer.pausedAt){C.resume(R.blockTimer,now);C.resume(R.sessionTimer,now);} else {C.pause(R.blockTimer,now);C.pause(R.sessionTimer,now);} persist(); renderRun(); }
+function startTick(){ stopTick(); updateTimers(); tick=setInterval(updateTimers,500); }
+function stopTick(){ if(tick){clearInterval(tick);tick=null;} }
+function updateTimers(){
+  if(!R||R.phase!=="run")return;
+  const now=Date.now(), b=curBlockDef();
+  const be=C.elapsedMs(R.blockTimer,now), bl=b.min*60000-be;
+  const se=C.elapsedMs(R.sessionTimer,now), sl=C.totalMinutes(menu)*60000-se;
+  const tb=$("tBlk"),ta=$("tAll"),pg=$("prog"),bar=$("timerbar");
+  if(!tb)return;
+  tb.textContent=(bl<0?"-":"")+C.fmt(Math.abs(bl)); ta.textContent=(sl<0?"-":"")+C.fmt(Math.abs(sl));
+  pg.style.width=Math.min(100,Math.round(be/(b.min*60000)*100))+"%";
+  bar.classList.toggle("over",bl<0);
+  if(bl<=0&&!R.notified){ R.notified=true; persist(); beep(3); buzz(); $("overBanner").innerHTML=`<div class="banner">⏰ 時間です。「次へ」で${R.blockIdx<menu.length-1?"次のブロック（"+esc(menu[R.blockIdx+1].name)+"）":"結果"}へ進んでください。<button class="btn sm" onclick="endBlock()">次へ →</button></div>`; }
+}
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&R&&R.phase==="run")updateTimers(); });   // スリープ復帰時に時刻差分で復元
+function closeBlock(){
+  const blk=curBlock(); const now=Date.now();
+  blk.endedAt=now; blk.actualSec=Math.round(C.elapsedMs(R.blockTimer,now)/1000);
+  if(R.blockTimer.pausedAt){C.resume(R.blockTimer,now);C.resume(R.sessionTimer,now);}
+}
+function endBlock(){ closeBlock(); R.phase="blockResult"; R.pendingNum=null; numOpen=false; persist(); stopTick(); renderBlockResult(); }
+function skipBlock(){ if(!confirm("このブロックをスキップして次へ進みますか？"))return; closeBlock(); nextBlock(); }
+function nextBlock(){
+  if(R.blockIdx>=menu.length-1){ R.phase="end"; persist(); renderEnd(); return; }
+  R.blockIdx++; R.phase="run"; R.notified=false; const now=Date.now(); R.blockTimer={startedAt:now,pausedAt:null,pausedMs:0}; ensureBlock(); persist(); renderRun();
+}
+function finishEarly(){ if(!confirm("練習を終了して結果画面へ進みますか？（未実施のブロックは記録されません）"))return; closeBlock(); R.phase="end"; persist(); stopTick(); renderEnd(); }
+/* ---- ブロック結果（§5.3） ---- */
+function renderBlockResult(){
+  const b=curBlockDef(), blk=curBlock(), sum=C.summarize(blk.shots), pass=C.judgeBlock(b,sum);
+  const miss=C.MISS_KINDS.filter(k=>sum.miss[k]).map(k=>`${k} ${sum.miss[k]}`).join("・")||"なし";
+  $("app").innerHTML=`<div class="card">
+    <h2>${esc(b.name)}　<span class="pill ${pass?"ok":"ng"}">${pass?"合格":"未達"}</span></h2>
+    <div class="small">予定 ${b.min}分／実績 ${C.fmt((blk.actualSec||0)*1000)}</div>
+    <div class="kpi" style="margin-top:8px;"><div><div class="k">球数</div><div class="v">${sum.balls}</div></div><div><div class="k">成功／許容／致命的</div><div class="v" style="font-size:20px;"><span style="color:var(--ok)">${sum.s}</span> / <span style="color:var(--warn)">${sum.ok}</span> / <span style="color:var(--danger)">${sum.fatal}</span></div></div></div>
+    <div class="small" style="margin-top:6px;">合格基準：${critText(b)}</div>
+    ${sum.avgCarry!=null||sum.maxSide!=null||sum.avgFtp!=null?`<div style="margin-top:6px;">平均Carry ${sum.avgCarry??"-"}${unit()}　最大左右偏差 ${sum.maxSide??"-"}${unit()}　平均Face to Path ${sum.avgFtp??"-"}</div>`:""}
+    <div style="margin-top:6px;">ミス傾向：${esc(miss)}</div>
+    <label>一言メモ</label><textarea id="bmemo" placeholder="例：右手で返す癖が出た">${esc(blk.memo||"")}</textarea>
+    ${b.id==="test"?(()=>{const t=C.judgeTest(blk.shots);return `<div class="banner" style="${t.pass?"background:#e6f4ea;border-color:#b7e0cb;color:var(--ok);":""}">本番4球テスト：${t.points}点／8点　${t.pass?"合格":"未達"}${t.fatal?`（0点が${t.fatal}球）`:""}</div>`;})():""}
+    <button class="btn" onclick="curBlock().memo=$('bmemo').value;nextBlock()">${R.blockIdx>=menu.length-1?"練習終了へ":"次のブロックへ →（"+esc(menu[R.blockIdx+1].name)+"）"}</button>
+  </div>`;
+}
+function critText(b){ const c=b.crit; if(c.kind==="test")return `${c.minPoints}点以上かつ0点なし`; return `成功${c.minSuccess}球以上・生存（成功＋許容）${c.minAlive}球以上・致命的${c.maxFatal}球以下`; }
+/* ---- 練習終了（§5.4） ---- */
+function renderEnd(){
+  const s=R.session; if(!s.endedAt){ s.endedAt=Date.now(); s.pausedMs=R.sessionTimer.pausedMs||0; }
+  const ss=C.summarizeSession(s,menu);
+  $("app").innerHTML=`<div class="card"><h2>練習終了</h2>
+    <div class="kpi"><div><div class="k">総球数</div><div class="v">${ss.balls}</div></div><div><div class="k">所要時間</div><div class="v">${ss.durationMin??"-"}<span style="font-size:13px;">分</span></div></div>
+      <div><div class="k">総合達成率</div><div class="v">${ss.rate}%</div></div><div><div class="k">今日の致命的ミス</div><div class="v" style="color:var(--danger)">${ss.fatal}</div></div></div>
+    ${ss.test?`<div class="banner" style="${ss.test.pass?"background:#e6f4ea;border-color:#b7e0cb;color:var(--ok);":""}">本番4球テスト ${ss.test.points}点／8点　${ss.test.pass?"合格":"未達"}</div>`:""}
+    <table style="margin-top:8px;"><tr><th>ブロック</th><th>球</th><th>○/△/×</th><th>合否</th></tr>
+      ${ss.perBlock.map(p=>`<tr><td class="l">${esc(p.name)}</td><td>${p.sum.balls}</td><td>${p.sum.s}/${p.sum.ok}/${p.sum.fatal}</td><td><span class="pill ${p.pass?"ok":"ng"}">${p.pass?"合格":"未達"}</span></td></tr>`).join("")}</table>
+    <label>今日よかった点</label><input type="text" id="eGood" value="${esc(s.good||"")}" placeholder="例：7Iのチョロがゼロ">
+    <label>次回の重点</label><input type="text" id="eNext" value="${esc(s.next||"")}" placeholder="例：50ydの距離感">
+    <label>体調</label><div class="grid" id="eCond">${["良い","普通","悪い"].map(v=>`<button class="opt ${s.condition===v?"sel":""}" onclick="R.session.condition='${v}';persist();renderEnd()">${v}</button>`).join("")}</div>
+    <label>疲労度（1〜5）</label><div class="grid">${[1,2,3,4,5].map(v=>`<button class="opt ${s.fatigue===v?"sel":""}" onclick="R.session.fatigue=${v};persist();renderEnd()">${v}</button>`).join("")}</div>
+    <button class="btn" onclick="saveSession()">記録を保存</button>
+    <button class="btn gray sm" onclick="R.phase='run';persist();renderRun()">戻って続ける</button>
+  </div>`;
+}
+function saveSession(){
+  const s=R.session; s.good=$("eGood").value.trim(); s.next=$("eNext").value.trim(); s.status="done";
+  Store.saveSession(s); Store.clearRunning(); R=null; toast("保存しました"); location.hash=`#/session/${s.id}`;
+}
+
+/* ============ 履歴（§5.5） ============ */
+function renderHistory(ym){
+  stopTick();
+  const sessions=Store.listSessions().filter(s=>s.status!=="running");
+  const now=new Date(); const [y,m]=ym?ym.split("-").map(Number):[now.getFullYear(),now.getMonth()+1];
+  const first=new Date(y,m-1,1), days=new Date(y,m,0).getDate(); const byDate={}; sessions.forEach(s=>{(byDate[s.date]=byDate[s.date]||[]).push(s);});
+  const prev=`${m===1?y-1:y}-${String(m===1?12:m-1).padStart(2,"0")}`, next=`${m===12?y+1:y}-${String(m===12?1:m+1).padStart(2,"0")}`;
+  const weekCount=sessions.filter(s=>s.startedAt>=Date.now()-7*86400000).length, monthCount=sessions.filter(s=>s.date.startsWith(`${y}-${String(m).padStart(2,"0")}`)).length;
+  let cal=["日","月","火","水","木","金","土"].map(d=>`<div class="hd">${d}</div>`).join("");
+  for(let i=0;i<first.getDay();i++)cal+=`<div></div>`;
+  for(let d=1;d<=days;d++){const ds=`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;const has=byDate[ds];cal+=`<div class="${has?"has":""} ${ds===todayStr()?"today":""}" ${has?`onclick="location.hash='#/session/${has[0].id}'"`:""}>${d}${has?`<span style="font-size:9px;">${C.summarizeSession(has[0],menu).rate}%</span>`:""}</div>`;}
+  $("app").innerHTML=`<div class="card"><div class="row"><button class="btn gray sm" onclick="location.hash='#/history/${prev}'">‹</button><h2 style="text-align:center;margin:0;">${y}年${m}月</h2><button class="btn gray sm" onclick="location.hash='#/history/${next}'">›</button></div>
+    <div class="cal" style="margin-top:8px;">${cal}</div>
+    <div class="small" style="margin-top:6px;">今週 ${weekCount}回・今月 ${monthCount}回</div></div>
+    <div class="card"><h2>練習一覧</h2>${sessions.length?sessions.slice(0,60).map(s=>{const ss=C.summarizeSession(s,menu);return `<div style="padding:8px 0;border-bottom:1px solid #eef0f3;cursor:pointer;" onclick="location.hash='#/session/${s.id}'"><b>${esc(s.date)}</b> <span class="pill ${ss.rate>=70?"ok":""}">達成率 ${ss.rate}%</span> ${ss.test?`<span class="pill ${ss.test.pass?"ok":"ng"}">テスト ${ss.test.points}点</span>`:""} <span class="small">${ss.balls}球・合格${ss.passed}/${ss.blocks}${s.status==="aborted"?"・中断":""}</span></div>`;}).join(""):`<div class="small">記録はありません。</div>`}</div>`;
+}
+/* ---- セッション詳細・修正（§4「後から記録を修正」） ---- */
+let editSess=null;
+function renderSession(id){
+  stopTick();
+  editSess=editSess&&editSess.id===id?editSess:Store.getSession(id);
+  if(!editSess){ $("app").innerHTML=`<div class="card">記録が見つかりません。<button class="btn gray" onclick="location.hash='#/history'">履歴へ</button></div>`; return; }
+  const s=editSess, ss=C.summarizeSession(s,menu);
+  $("app").innerHTML=`<div class="card"><h2>${esc(s.date)}　<span class="pill ${ss.rate>=70?"ok":""}">達成率 ${ss.rate}%</span></h2>
+    <div class="small">${esc(s.place||"")}　${ss.balls}球・${ss.durationMin??"-"}分・致命的ミス ${ss.fatal}球${ss.test?`　本番テスト ${ss.test.points}点（${ss.test.pass?"合格":"未達"}）`:""}</div>
+    ${s.good?`<div style="margin-top:4px;">よかった点：${esc(s.good)}</div>`:""}${s.next?`<div>次回の重点：${esc(s.next)}</div>`:""}
+    <div class="small">体調：${esc(s.condition||"-")}　疲労度：${s.fatigue??"-"}</div>
+    <div class="small" style="margin-top:6px;">球をタップすると ○→△→× と評価を変更できます（集計・グラフも更新されます）。</div></div>
+    ${(s.blocks||[]).map((b,bi)=>{const def=menu.find(m=>m.id===b.id)||{name:b.id};const sum=C.summarize(b.shots);const pass=C.judgeBlock(def,sum);
+      return `<div class="card" style="padding:10px 14px;"><div class="row"><b>${esc(def.name)}</b><span style="flex:0 0 auto;"><span class="pill ${pass?"ok":"ng"}">${pass?"合格":"未達"}</span> <span class="small">${sum.s}/${sum.ok}/${sum.fatal}</span></span></div>
+        <div class="shotlist">${(b.shots||[]).map((sh,si)=>`<div class="chip s${sh.score}" onclick="cycleShot(${bi},${si})" title="${esc(sh.target||"")}">${sh.score===2?"○":sh.score===1?"△":"×"}</div>`).join("")}<div class="chip e" onclick="addShotTo(${bi})" title="1球追加">＋</div></div>
+        ${(b.shots||[]).some(sh=>sh.carry!=null||sh.side!=null)?`<div class="small" style="margin-top:4px;">${(b.shots||[]).filter(sh=>sh.carry!=null||sh.side!=null).map(sh=>`#${sh.n} ${sh.carry!=null?"C"+sh.carry:""}${sh.side!=null?" S"+sh.side:""}${sh.ftp!=null?" F"+sh.ftp:""}`).join("　")}</div>`:""}
+        ${b.memo?`<div class="small">メモ：${esc(b.memo)}</div>`:""}
+        <div class="row" style="margin-top:6px;"><button class="btn gray sm" onclick="delLastShot(${bi})" ${(b.shots||[]).length?"":"disabled"}>最後の1球を削除</button></div></div>`;}).join("")}
+    <div class="card"><button class="btn" onclick="saveEdit()">修正を保存</button><button class="btn gray sm" onclick="location.hash='#/history'">履歴へ</button><button class="btn danger sm" onclick="delSession('${s.id}')">この記録を削除</button></div>`;
+}
+function cycleShot(bi,si){ const sh=editSess.blocks[bi].shots[si]; sh.score=sh.score===2?1:sh.score===1?0:2; renderSession(editSess.id); }
+function addShotTo(bi){ const b=editSess.blocks[bi]; b.shots.push({n:b.shots.length+1,score:2,at:Date.now()}); renderSession(editSess.id); }
+function delLastShot(bi){ editSess.blocks[bi].shots.pop(); renderSession(editSess.id); }
+function saveEdit(){ Store.saveSession(editSess); toast("保存しました"); }
+function delSession(id){ if(!confirm("この記録を削除しますか？"))return; Store.deleteSession(id); editSess=null; location.hash="#/history"; }
+
+/* ============ 分析（§5.5） ============ */
+function renderAnalysis(period){
+  stopTick();
+  const days=period==="all"?0:period==="30"?30:7;
+  const an=C.analyze(Store.listSessions(),menu,days);
+  const tile=(k,v,suf)=>`<div><div class="k">${k}</div><div class="v">${v!=null?v+(suf||""):"-"}</div></div>`;
+  const bars=(arr,key,max,cls)=>`<div class="bar">${arr.slice(-20).map(t=>`<div class="${cls&&cls(t)?"ng":""}" style="height:${t[key]!=null?Math.max(4,t[key]/max*100):0}%"><span>${t[key]??""}</span></div>`).join("")}</div><div class="small">${arr.length?arr.slice(-20)[0].date+" 〜 "+arr[arr.length-1].date:""}</div>`;
+  $("app").innerHTML=`<div class="card"><div class="grid">${[["7","7日"],["30","30日"],["all","全期間"]].map(([k,l])=>`<button class="opt ${(period||"7")===k?"sel":""}" onclick="location.hash='#/analysis/${k}'">${l}</button>`).join("")}</div>
+    <div class="kpi" style="margin-top:8px;">${tile("練習回数",an.sessions,"回")}${tile("平均達成率",an.avgRate,"%")}${tile("7I 致命的ミス率",an.i7FatalRate,"%")}${tile("110〜135yd 目標円内率",an.midInCircleRate,"%")}${tile("DR 生存率",an.drAliveRate,"%")}${tile("DR OB想定率",an.drObRate,"%")}${tile("30〜90yd グリーン相当率",an.shortGreenRate,"%")}</div></div>
+    <div class="card"><h3>本番4球テスト点数の推移（最大8）</h3>${an.trend.length?bars(an.trend,"test",8,t=>t.test!=null&&t.test<6):`<div class="small">記録なし</div>`}
+      <h3>総合達成率の推移（%）</h3>${an.trend.length?bars(an.trend,"rate",100):""}</div>
+    <div class="card"><h3>ブロック別達成率</h3><div class="wide"><table><tr><th>ブロック</th><th>回</th><th>達成率</th><th>成功率</th><th>生存率</th><th>致命</th><th>Carry</th><th>Side</th><th>FtP</th></tr>
+      ${an.blocks.map(b=>`<tr><td class="l" style="white-space:nowrap;">${esc(b.name)}</td><td>${b.sessions}</td><td style="font-weight:800;${b.passRate!=null&&b.passRate<50?"color:var(--danger)":""}">${b.passRate??"-"}${b.passRate!=null?"%":""}</td><td>${b.successRate??"-"}${b.successRate!=null?"%":""}</td><td>${b.aliveRate??"-"}${b.aliveRate!=null?"%":""}</td><td>${b.fatalRate??"-"}${b.fatalRate!=null?"%":""}</td><td>${b.avgCarry??"-"}</td><td>${b.avgSide??"-"}</td><td>${b.avgFtp??"-"}</td></tr>`).join("")}</table></div>
+      <div class="small">Carry／Side／Face to Path は数値を入力した球の平均（Sideは右＋・左−）。</div></div>`;
+}
+
+/* ============ 設定（§9） ============ */
+function renderSettings(){
+  stopTick(); const s=settings;
+  $("app").innerHTML=`<div class="card"><h2>設定</h2>
+    <label>利き手</label><div class="grid">${["右","左"].map(v=>`<button class="opt ${s.hand===v?"sel":""}" onclick="setS('hand','${v}')">${v}</button>`).join("")}</div>
+    <label>距離の単位</label><div class="grid">${[["yd","ヤード"],["m","メートル"]].map(([v,l])=>`<button class="opt ${s.unit===v?"sel":""}" onclick="setS('unit','${v}')">${l}</button>`).join("")}</div>
+    <label>通知</label><div class="grid"><button class="opt ${s.sound?"sel":""}" onclick="setS('sound',${!s.sound})">音 ${s.sound?"ON":"OFF"}</button><button class="opt ${s.vibrate?"sel":""}" onclick="setS('vibrate',${!s.vibrate})">振動 ${s.vibrate?"ON":"OFF"}</button><button class="opt" onclick="beep(2);buzz()">テスト</button></div>
+    <label>練習場所</label><div class="grid">${(s.places||[]).map(p=>`<button class="opt ${s.place===p?"sel":""}" onclick="setS('place','${esc(p)}')">${esc(p)}</button>`).join("")}</div>
+    <div class="row" style="margin-top:6px;"><input type="text" id="newPlace" placeholder="場所を追加"><button class="btn light sm" style="flex:0 0 auto;" onclick="addPlace()">追加</button></div></div>
+    <div class="card"><h2>各ブロックの時間・球数・合格基準</h2><div class="wide"><table><tr><th>ブロック</th><th>分</th><th>球</th><th>成功≥</th><th>生存≥</th><th>致命≤</th></tr>
+      ${menu.map(b=>`<tr><td class="l" style="white-space:nowrap;">${esc(b.name)}</td><td><input type="number" style="width:52px;padding:4px;" value="${b.min}" onchange="setBlk('${b.id}','min',this.value)"></td><td><input type="number" style="width:52px;padding:4px;" value="${b.balls}" onchange="setBlk('${b.id}','balls',this.value)"></td>
+        ${b.crit.kind==="test"?`<td colspan="2"><input type="number" style="width:52px;padding:4px;" value="${b.crit.minPoints}" onchange="setCrit('${b.id}','minPoints',this.value)"> 点以上</td>`:`<td><input type="number" style="width:52px;padding:4px;" value="${b.crit.minSuccess}" onchange="setCrit('${b.id}','minSuccess',this.value)"></td><td><input type="number" style="width:52px;padding:4px;" value="${b.crit.minAlive}" onchange="setCrit('${b.id}','minAlive',this.value)"></td>`}
+        <td><input type="number" style="width:52px;padding:4px;" value="${b.crit.maxFatal}" onchange="setCrit('${b.id}','maxFatal',this.value)"></td></tr>`).join("")}</table></div>
+      <div class="small">合計 ${C.totalMinutes(menu)}分。時間になったら球数が未達でも次のブロックへ進みます。</div></div>
+    <div class="card"><h2>目標距離</h2>
+      <label>110〜135yd精度（4距離）</label><input type="text" id="tgMid" value="${(s.targets.mid||[]).join(",")}" onchange="setTargets()">
+      <label>30〜90yd距離感（4距離）</label><input type="text" id="tgShort" value="${(s.targets.short||[]).join(",")}" onchange="setTargets()">
+      <h2 style="margin-top:12px;">クラブ一覧と平均Carry</h2><div class="wide"><table><tr><th>クラブ</th><th>平均Carry</th><th></th></tr>${(s.clubs||[]).map((c,i)=>`<tr><td><input type="text" style="padding:4px;" value="${esc(c[0])}" onchange="setClub(${i},0,this.value)"></td><td><input type="number" style="width:80px;padding:4px;" value="${c[1]}" onchange="setClub(${i},1,this.value)"></td><td><button class="btn gray sm" onclick="delClub(${i})">×</button></td></tr>`).join("")}</table></div>
+      <button class="btn light sm" onclick="settings.clubs.push(['',0]);saveS()">＋ クラブを追加</button></div>
+    <div class="card"><h2>データ</h2>
+      <button class="btn light" onclick="exportCSV()">CSV出力（全ショット）</button>
+      <button class="btn light" onclick="exportBackup()">バックアップ（JSON）を保存</button>
+      <label>バックアップから復元</label><input type="file" accept="application/json" onchange="importBackup(this.files[0])">
+      <div class="small" style="margin-top:8px;">保存先：この端末のブラウザ内（LocalStorage）。別端末と同期するFirebase版は次の段階で追加します。</div></div>`;
+}
+function saveS(){ Store.saveSettings(settings); menu=C.buildMenu(settings); renderSettings(); }
+function setS(k,v){ settings[k]=v; saveS(); }
+function addPlace(){ const v=$("newPlace").value.trim(); if(!v)return; settings.places=settings.places||[]; if(!settings.places.includes(v))settings.places.push(v); settings.place=v; saveS(); }
+function setBlk(id,k,v){ settings.blocks=settings.blocks||{}; settings.blocks[id]=settings.blocks[id]||{}; settings.blocks[id][k]=Math.max(1,parseInt(v)||1); saveS(); }
+function setCrit(id,k,v){ settings.blocks=settings.blocks||{}; settings.blocks[id]=settings.blocks[id]||{}; settings.blocks[id].crit=settings.blocks[id].crit||{}; settings.blocks[id].crit[k]=Math.max(0,parseInt(v)||0); saveS(); }
+function setTargets(){ const p=id=>$(id).value.split(/[,、\s]+/).map(Number).filter(n=>n>0).slice(0,4); const mid=p("tgMid"),sh=p("tgShort"); if(mid.length===4)settings.targets.mid=mid; if(sh.length===4)settings.targets.short=sh; saveS(); }
+function setClub(i,k,v){ settings.clubs[i][k]=k===1?Number(v):v.trim(); Store.saveSettings(settings); }
+function delClub(i){ settings.clubs.splice(i,1); saveS(); }
+function download(name,text,type){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["﻿"+text],{type})); a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(()=>URL.revokeObjectURL(a.href),3000); }
+function exportCSV(){ download(`golf_practice_${todayStr()}.csv`,C.toCSV(Store.listSessions().filter(s=>s.status!=="running"),menu),"text/csv;charset=utf-8"); }
+function exportBackup(){ download(`golf_practice_backup_${todayStr()}.json`,Store.exportAll(),"application/json"); }
+function importBackup(file){ if(!file)return; const r=new FileReader(); r.onload=()=>{ try{ const n=Store.importAll(r.result); toast(`${n}件の記録を取り込みました`); route(); }catch(e){ alert("復元できません："+e.message); } }; r.readAsText(file); }
+
+route();
+</script>
+</body>
+</html>

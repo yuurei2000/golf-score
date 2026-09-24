@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><title>practice-core テスト</title>
+<style>body{font-family:sans-serif;padding:16px;font-size:14px}.ok{color:#1f7a4d}.ng{color:#b42318;font-weight:700}pre{background:#f4f4f4;padding:8px}</style>
+</head><body>
+<h2>practice-core.js 自動テスト</h2>
+<div id="out"></div>
+<script src="practice-core.js"></script>
+<script>
+const out=document.getElementById("out"); let pass=0,fail=0;
+function eq(name,actual,expected){
+  const a=JSON.stringify(actual),e=JSON.stringify(expected); const ok=a===e; if(ok)pass++; else fail++;
+  out.insertAdjacentHTML("beforeend",`<div class="${ok?"ok":"ng"}">${ok?"✔":"✘"} ${name}${ok?"":`<pre>expected ${e}\nactual   ${a}</pre>`}</div>`);
+}
+const C=PracticeCore; const menu=C.buildMenu({});
+const sh=(...scores)=>scores.map((s,i)=>({n:i+1,score:s}));
+const B=id=>menu.find(b=>b.id===id);
+
+/* メニュー：8ブロック・45分・58〜60球 */
+eq("8ブロック",menu.length,8);
+eq("合計45分",C.totalMinutes(menu),45);
+eq("最初の10分＝右3・左3・スプリット4",[B("rh").min,B("lh").min,B("sh").min],[3,3,4]);
+eq("総球数64（目安58〜60＋テスト4）",menu.reduce((a,b)=>a+b.balls,0),64);
+eq("設定で時間・球数・基準を上書き",(()=>{const m=C.buildMenu({blocks:{i7:{min:9,balls:12,crit:{maxFatal:0}}}});const b=m.find(x=>x.id==="i7");return [b.min,b.balls,b.crit.maxFatal,b.crit.minSuccess];})(),[9,12,0,7]);
+
+/* 集計 */
+let s=C.summarize(sh(2,2,1,0,2));
+eq("集計 s/ok/fatal/points/max/rate",[s.s,s.ok,s.fatal,s.points,s.max,s.rate],[3,1,1,7,10,70]);
+eq("生存率・致命的ミス率",[s.alive,s.fatalRate],[80,20]);
+eq("数値：平均Carry・最大左右偏差・平均FtP",(()=>{const x=C.summarize([{score:2,carry:150,side:-5,ftp:1.2},{score:1,carry:140,side:12,ftp:-0.8},{score:2}]);return [x.avgCarry,x.maxSide,x.avgFtp];})(),[145,12,0.2]);
+
+/* ブロック合否 */
+eq("7I：成功7・生存8・致命1 → 合格",C.judgeBlock(B("i7"),C.summarize(sh(2,2,2,2,2,2,2,1,0,1))),true);
+eq("7I：成功7だが致命2 → 未達",C.judgeBlock(B("i7"),C.summarize(sh(2,2,2,2,2,2,2,0,0,1))),false);
+eq("110〜135：成功10・生存13・致命1 → 合格",C.judgeBlock(B("mid"),C.summarize(sh(2,2,2,2,2,2,2,2,2,2,1,1,1,0,1,1))),true);
+eq("30〜90：全8球生存・成功6 → 合格",C.judgeBlock(B("short"),C.summarize(sh(2,2,2,2,2,2,1,1))),true);
+eq("30〜90：致命1 → 未達（maxFatal 0）",C.judgeBlock(B("short"),C.summarize(sh(2,2,2,2,2,2,1,0))),false);
+eq("DR：次打可能7・170以上6・OB1 → 合格",C.judgeBlock(B("dr"),C.summarize(sh(2,2,2,2,2,2,1,0))),true);
+eq("球なしは未達",C.judgeBlock(B("i7"),C.summarize([])),false);
+
+/* 本番4球テスト（受入条件7） */
+eq("テスト 2,2,2,1＝7点 合格",C.judgeTest(sh(2,2,2,1)),{points:7,max:8,pass:true,fatal:0});
+eq("テスト 2,2,2,0＝6点でも0点あり → 未達",C.judgeTest(sh(2,2,2,0)).pass,false);
+eq("テスト 2,1,1,1＝5点 → 未達",C.judgeTest(sh(2,1,1,1)).pass,false);
+eq("テスト 3球のみ → 未達",C.judgeTest(sh(2,2,2)).pass,false);
+
+/* 目標距離列 */
+const rng=()=>0.5;
+eq("110〜135：各距離2球→残り8球",C.targetsFor(B("mid"),{},rng).slice(0,8),["110yd","110yd","116yd","116yd","126yd","126yd","135yd","135yd"]);
+eq("110〜135：16球",C.targetsFor(B("mid"),{},rng).length,16);
+const st=C.targetsFor(B("short"),{});
+eq("30〜90：8球・各距離2球",[st.length,["30yd","50yd","70yd","90yd"].map(d=>st.filter(x=>x===d).length)],[8,[2,2,2,2]]);
+eq("30〜90：同距離が連続しない",st.every((v,i)=>i===0||v!==st[i-1]),true);
+eq("テスト4球の順",C.targetsFor(B("test"),{}).map(x=>x.split("：")[0]),["DR","7I","126yd","50yd"]);
+eq("目標距離を設定で変更",C.targetsFor(B("mid"),{targets:{mid:[100,120,130,140]}},rng)[2],"120yd");
+
+/* セッション集計 */
+const sess={id:"x",date:"2026-09-25",startedAt:1000,endedAt:1000+45*60000,pausedMs:0,status:"done",blocks:[
+  {id:"rh",shots:sh(2,2,2,1,1)},{id:"lh",shots:sh(2,2,2,1,0)},{id:"sh",shots:sh(2,2,2,2,2,2,1,1)},
+  {id:"i7",shots:sh(2,2,2,2,2,2,2,1,0,1)},{id:"mid",shots:sh(2,2,2,2,2,2,2,2,2,2,1,1,1,0,1,1)},
+  {id:"short",shots:sh(2,2,2,2,2,2,1,1)},{id:"dr",shots:sh(2,2,2,2,2,2,1,0)},{id:"test",shots:sh(2,2,2,1)}]};
+let ss=C.summarizeSession(sess,menu);
+eq("セッション：球数64・所要45分",[ss.balls,ss.durationMin],[64,45]);
+eq("セッション：合格ブロック数 8/8",[ss.passed,ss.blocks],[8,8]);
+eq("セッション：テスト7点合格",[ss.test.points,ss.test.pass],[7,true]);
+eq("総合達成率＝獲得÷最大",ss.rate,Math.round(ss.points/ss.max*100));
+
+/* タイマー：時刻差分から復元、一時停止 */
+let t={startedAt:0,pausedAt:null,pausedMs:0};
+eq("経過 30秒",C.elapsedMs(t,30000),30000);
+C.pause(t,30000); eq("一時停止中は進まない",C.elapsedMs(t,90000),30000);
+C.resume(t,90000); eq("再開後：停止分を除いて経過",C.elapsedMs(t,100000),40000);
+eq("fmt",[C.fmt(0),C.fmt(65000),C.fmt(180000)],["0:00","1:05","3:00"]);
+
+/* 分析：7日／30日、ブロック別達成率、致命的ミス率、推移（受入条件8・9） */
+const day=86400000, now=Date.parse("2026-09-25T12:00:00");
+const ymd=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
+const mk=(d,i7Fatal,test)=>({id:"s"+d,date:ymd(new Date(now-d*day)),startedAt:now-d*day,endedAt:now-d*day+2700000,status:"done",blocks:[
+  {id:"i7",shots:[...sh(2,2,2,2,2,2,2,1),...sh(...Array(i7Fatal).fill(0)),...sh(...Array(2-i7Fatal).fill(1))]},{id:"test",shots:test}]});
+const sessions=[mk(1,0,sh(2,2,2,1)),mk(3,2,sh(2,2,2,0)),mk(10,1,sh(2,2,2,2)),mk(40,0,sh(2,2,2,2))];
+let an=C.analyze(sessions,menu,7,now);
+eq("7日：2セッション",an.sessions,2);
+eq("7日：7I達成率 50%（1/2）",an.blocks.find(b=>b.id==="i7").passRate,50);
+eq("7日：7I致命的ミス率 10%（2/20）",an.i7FatalRate,10);
+eq("7日：テスト点推移",an.trend.map(t=>t.test),[6,7]);
+an=C.analyze(sessions,menu,30,now); eq("30日：3セッション",an.sessions,3);
+an=C.analyze(sessions,menu,0,now); eq("全期間：4セッション",an.sessions,4);
+eq("進行中セッションは分析に含めない",C.analyze(sessions.concat([{id:"r",date:"2026-09-25",startedAt:now,status:"running",blocks:[]}]),menu,0,now).sessions,4);
+/* 前日の記録を修正すると集計が変わる（受入条件9） */
+sessions[0].blocks[0].shots[7].score=0; an=C.analyze(sessions,menu,7,now);
+eq("修正後：7I致命的ミス率 15%（3/20）",an.i7FatalRate,15);
+/* 連続練習日数・重点課題 */
+eq("連続日数（昨日から遡る）",C.streak([{date:"2026-09-24",status:"done"},{date:"2026-09-23",status:"done"},{date:"2026-09-21",status:"done"}],"2026-09-25"),2);
+eq("今日練習済みなら今日から",C.streak([{date:"2026-09-25",status:"done"},{date:"2026-09-24",status:"done"}],"2026-09-25"),2);
+eq("重点課題＝達成率が最も低いブロック",C.focusOf(an).id,"i7");
+/* CSV */
+const csv=C.toCSV([sess],menu).split("\r\n");
+eq("CSV：ヘッダ＋64行",csv.length,65);
+eq("CSV：本番テスト行",csv[64].split(",").slice(2,7),["本番4球テスト","4","","","1"]);
+
+out.insertAdjacentHTML("afterbegin",`<h3 class="${fail?"ng":"ok"}">結果：${pass} 件成功 / ${fail} 件失敗</h3>`);
+window.__testResult={pass,fail};
+</script></body></html>
