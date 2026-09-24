@@ -81,6 +81,7 @@ td.l{text-align:left;font-weight:700;}
 <nav id="tabs"></nav>
 <div class="toast" id="toast"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="practice-core.js"></script>
 <script src="store.js"></script>
 <script>
@@ -128,6 +129,7 @@ function renderHome(){
       ${run?`<div class="banner">中断中の練習があります（${esc(menu[run.blockIdx]?.name||"")}）</div><button class="btn" onclick="location.hash='#/run'">▶ 練習を再開する</button><button class="btn gray sm" onclick="discardRunning()">中断中の練習を破棄</button>`
           :`<button class="btn" style="min-height:64px;font-size:19px;" onclick="startPractice()">▶ 今日の45分練習を開始</button>`}
       <div class="small" style="margin-top:6px;">練習場所：${esc(settings.place||"")}　合計 ${C.totalMinutes(menu)}分・${menu.reduce((a,b)=>a+b.balls,0)}球</div>
+      <button class="btn gray sm" onclick="showQr()">このアプリのQRコード・URL</button>
     </div>
     <div class="card"><h2>直近の練習</h2>
       ${last?`<div style="font-weight:800;">${esc(last.date)}　<span class="pill ${ls.rate>=70?"ok":""}">達成率 ${ls.rate}%</span> ${ls.test?`<span class="pill ${ls.test.pass?"ok":"ng"}">本番テスト ${ls.test.points}点</span>`:""}</div>
@@ -140,6 +142,15 @@ function renderHome(){
       <h3>今週の重点課題</h3>
       ${focus?`<div><b>${esc(focus.name)}</b>：達成率 ${focus.passRate}%（${focus.sessions}回中）・致命的ミス率 ${focus.fatalRate}%</div><div class="small">${esc((menu.find(b=>b.id===focus.id)||{}).point||"")}</div>`:`<div class="small">記録が増えると、達成率が最も低いブロックを表示します。</div>`}
     </div>`;
+}
+/* アクセス用QRコード（別端末で開く・ホーム画面に追加する用） */
+function showQr(){
+  const url=location.origin+location.pathname;
+  const m=document.createElement("div"); m.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;";
+  m.innerHTML=`<div class="card" style="width:100%;max-width:360px;margin:0;"><h2>このアプリのQRコード</h2><div id="qrBox" style="display:flex;justify-content:center;margin:10px 0;"></div><div class="small" style="word-break:break-all;background:#f2f4f7;padding:8px;border-radius:8px;">${esc(url)}</div><div class="small" style="margin-top:6px;">スマートフォンで読み取り、ブラウザのメニューから「ホーム画面に追加」するとアプリとして使えます。</div><button class="btn gray sm" onclick="this.closest('div[style]').remove()">閉じる</button></div>`;
+  m.addEventListener("click",e=>{ if(e.target===m)m.remove(); });
+  document.body.appendChild(m);
+  try{ new QRCode(m.querySelector("#qrBox"),{text:url,width:200,height:200,colorDark:"#1f7a4d"}); }catch(_){ m.querySelector("#qrBox").innerHTML=`<div class="small">QR生成不可（オフライン）</div>`; }
 }
 function discardRunning(){ if(!confirm("中断中の練習を破棄しますか？（記録は保存されません）"))return; Store.clearRunning(); renderHome(); }
 
