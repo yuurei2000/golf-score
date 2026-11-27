@@ -96,6 +96,30 @@ t("参加者の色は 16 色とも違う", function () {
   var s = {}; for (var i = 1; i <= 16; i++) { var h = B.playerHue(i); if (s[h]) return "同じ色 " + i; s[h] = 1; } return true;
 });
 
+t("参加：空いている番号から引く", function () {
+  var seats = {}; for (var i = 1; i <= 15; i++) if (i !== 7) seats[i] = { name: "p" + i, key: "k" + i };
+  var r = B.pickSeat(seats, "新しい人", "knew", function () { return 0.99; });
+  return r.no === 7 || r.no === 16 ? (r.reused === false || "reused") : "番号 " + r.no;
+});
+t("参加：16 人がそれぞれ違う番号を引き、17 人目は満員", function () {
+  var seats = {}, rnd = B.rng("seat-test");
+  for (var i = 0; i < 16; i++) { var r = B.pickSeat(seats, "人" + i, "k" + i, rnd); if (r.full || seats[r.no]) return "重なり " + r.no; seats[r.no] = { name: "人" + i, key: "k" + i }; }
+  var r17 = B.pickSeat(seats, "人16", "k16", rnd);
+  return Object.keys(seats).length === 16 && r17.full === true || JSON.stringify(r17);
+});
+t("参加：引く番号はばらける（1 人目の番号が 1 に偏らない）", function () {
+  var cnt = {}; for (var i = 0; i < 1600; i++) { var r = B.pickSeat({}, "a", "k", B.rng("s" + i)); cnt[r.no] = (cnt[r.no] || 0) + 1; }
+  var ks = Object.keys(cnt); return ks.length === 16 && ks.every(function (k) { return cnt[k] > 50 && cnt[k] < 160; }) || JSON.stringify(cnt);
+});
+t("参加：同じ端末で入り直すと同じ番号", function () {
+  var r = B.pickSeat({ 5: { name: "山田", key: "abc" } }, "別の名前", "abc"); return r.no === 5 && r.reused || JSON.stringify(r);
+});
+t("参加：同じ名前（空白・全角半角の違いは同じ）なら同じ番号", function () {
+  var r = B.pickSeat({ 9: { name: "ヤマダ　タロウ", key: "x" } }, "ヤマダタロウ", "other");
+  var r2 = B.pickSeat({ 3: { name: "ABC", key: "x" } }, "ａｂｃ", "other");
+  return r.no === 9 && r.reused && r2.no === 3 || JSON.stringify([r, r2]);
+});
+
 var ok = results.filter(function (r) { return r.ok; }).length;
 document.getElementById("out").innerHTML = "<p><b>" + ok + " / " + results.length + "</b></p>" + results.map(function (r) {
   return '<div class="' + (r.ok ? "ok" : "ng") + '">' + (r.ok ? "OK " : "NG ") + r.name + (r.msg ? "：" + r.msg : "") + "</div>";

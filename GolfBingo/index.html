@@ -4,12 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ゴルフビンゴ</title>
-<meta name="description" content="16 名がそれぞれ違うカードで遊ぶ、ラウンド中のゴルフビンゴ">
+<meta name="description" content="参加すると 16 枚のうち空いているカードがランダムに当たる、ラウンド中のゴルフビンゴ">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
 <script src="bingo-core.js"></script>
+<script src="bingo-sync.js"></script>
 <style>
 :root {
   --bg: #f3f6f1; --panel: #ffffff; --ink: #1d2a22; --sub: #5a6b60; --line: #d5ded6;
@@ -124,10 +128,37 @@ body.printmode #printView { display: block; }
 </head>
 <body>
 <main>
+  <!-- 参加（ログイン） -->
+  <section id="joinView" hidden>
+    <h1>⛳ ゴルフビンゴ</h1>
+    <p class="sub">名前を入れて「参加する」を押すと、空いている番号のカードがランダムに当たります。16 枚とも中身も並びも違います。</p>
+    <div class="panel">
+      <p class="sub" style="margin-top:0">ゲームコード <b id="joinCode"></b></p>
+      <div id="joinForm">
+        <input type="text" id="joinName" placeholder="名前（例：山田）" maxlength="20" autocomplete="nickname">
+        <div class="row" style="margin-top:10px">
+          <button class="primary" id="btnJoin" style="flex:1;font-size:1.1rem;padding:12px">参加する（カードを引く）</button>
+        </div>
+      </div>
+      <div id="joinedBox" hidden>
+        <p style="margin:0 0 10px">この端末は <b id="joinedLabel"></b> で参加しています。</p>
+        <div class="row">
+          <a class="btn primary" id="joinedOpen" href="#">カードを開く</a>
+          <button id="btnJoinOther">別の名前で参加する</button>
+        </div>
+      </div>
+      <p id="joinMsg" class="sub"></p>
+    </div>
+    <div class="panel">
+      <h2>遊び方</h2>
+      <p style="margin:0">ラウンド中、マスの出来事ができたらタップ → 何番ホールかを選びます。縦・横・斜めの 5 マスがそろえば<b>ビンゴ</b>。真ん中は最初から開いています。順位はビンゴの本数 → リーチの数 → 開いたマスの数です。</p>
+    </div>
+  </section>
+
   <!-- 幹事の画面 -->
   <section id="hostView" hidden>
-    <h1>⛳ ゴルフビンゴ</h1>
-    <p class="sub">16 名それぞれに違うカード。ラウンド中に出来事が起きたらマスを開けて、縦・横・斜めをそろえます。</p>
+    <h1>⛳ ゴルフビンゴ（幹事）</h1>
+    <p class="sub">16 名それぞれに違うカード。参加した人に、空いている番号のカードがランダムに当たります。</p>
 
     <div class="panel">
       <h2>ゲームコード</h2>
@@ -143,27 +174,35 @@ body.printmode #printView { display: block; }
     </div>
 
     <div class="panel">
-      <h2>参加者 16 名</h2>
-      <p class="sub">名前は任意です（この端末にだけ残ります。カードの URL には入りません）。各自に「カード」の URL か QR を渡してください。</p>
-      <div class="players" id="players"></div>
-      <div class="row" style="margin-top:12px">
+      <h2>参加の URL（全員共通）</h2>
+      <p class="sub" style="margin-top:0">全員にこの URL か QR を送ってください。各自が名前を入れて参加すると、カードがランダムに当たります。</p>
+      <div class="qrbox" id="joinQr"></div>
+      <p id="joinUrl" style="word-break:break-all;text-align:center;margin:6px 0"></p>
+      <div class="row" style="justify-content:center"><button class="primary" id="btnCopyJoin">URL を写す</button></div>
+    </div>
+
+    <div class="panel">
+      <h2>参加状況と順位 <span class="sub" id="seatCount"></span></h2>
+      <p class="sub" id="syncNote" style="margin-top:0"></p>
+      <div id="ranking"></div>
+    </div>
+
+    <div class="panel">
+      <h2>印刷・番号を決めて配る</h2>
+      <div class="row">
         <button class="primary" id="btnPrint">全員のカードを印刷（A4 に 4 枚）</button>
-        <button id="btnCopyAll">全員の URL を写す</button>
       </div>
+      <details style="margin-top:10px">
+        <summary>番号ごとのカードの URL（参加を使わずに配るとき）</summary>
+        <div class="players" id="players" style="margin-top:8px"></div>
+        <div class="row" style="margin-top:8px"><button id="btnCopyAll">全員の URL を写す</button></div>
+      </details>
     </div>
 
     <div class="panel">
       <h2>16 枚の違い</h2>
       <div class="stats" id="stats"></div>
       <p class="sub" id="statsNote"></p>
-    </div>
-
-    <div class="panel">
-      <h2>遊び方</h2>
-      <p>① 各自、自分の番号のカードを開く。<br>
-      ② ラウンド中、マスの出来事ができたらタップ → 何番ホールかを選ぶ（記録が残ります）。<br>
-      ③ 縦・横・斜めの 5 マスがそろえば<b>ビンゴ</b>。真ん中は最初から開いています。<br>
-      ④ 上がりの後、各自の「結果」を見せ合って順位を決めます（ビンゴの本数 → リーチの数 → 開いたマスの数）。</p>
       <p class="sub">★の数はむずかしさ。どのカードも、やさしい 10・ふつう 9・むずかしい（★★）5 個で、どの列にもやさしいが 1 個以上・むずかしいは 2 個までです。</p>
     </div>
   </section>
@@ -171,13 +210,13 @@ body.printmode #printView { display: block; }
   <!-- 各自のカード -->
   <section id="cardView" hidden>
     <div class="row noprint" style="justify-content:space-between">
-      <a class="btn" id="backHost" href="#">← 幹事の画面</a>
       <span class="sub" id="cardCode"></span>
+      <span class="sub" id="syncState"></span>
     </div>
     <div class="panel">
       <div class="cardhead">
         <div class="badge" id="badge">No.1</div>
-        <input type="text" id="myName" placeholder="名前（任意）" maxlength="20">
+        <input type="text" id="myName" placeholder="名前" maxlength="20">
       </div>
       <div class="letters" id="letters"></div>
       <div class="grid5" id="grid"></div>
@@ -226,19 +265,25 @@ body.printmode #printView { display: block; }
 <script>
 (function () {
   "use strict";
-  var B = window.BingoCore, N = 16;
+  var B = window.BingoCore, S = window.BingoSync, N = 16;
   var COLS = ["G", "O", "L", "F", "★"];
 
   // ---- この端末への保存（使えなくても動く） ----
   function load(key, def) { try { var v = localStorage.getItem("gb_" + key); return v ? JSON.parse(v) : def; } catch (e) { return def; } }
   function save(key, v) { try { localStorage.setItem("gb_" + key, JSON.stringify(v)); } catch (e) {} }
+  function deviceKey() {
+    var k = load("device", "");
+    if (!k) { var b = new Uint8Array(12); crypto.getRandomValues(b); k = Array.from(b, function (x) { return x.toString(16).padStart(2, "0"); }).join(""); save("device", k); }
+    return k;
+  }
 
   function parseHash() {
     var h = location.hash.replace(/^#/, ""), o = {};
     h.split("&").forEach(function (kv) { if (!kv) return; var i = kv.indexOf("="); o[decodeURIComponent(i < 0 ? kv : kv.slice(0, i))] = i < 0 ? "" : decodeURIComponent(kv.slice(i + 1)); });
     return o;
   }
-  function baseUrl() { return location.href.split("#")[0]; }
+  function baseUrl() { return location.href.split("#")[0].split("?")[0]; }
+  function joinUrl(code) { return baseUrl() + "#g=" + code; }
   function cardUrl(code, no) { return baseUrl() + "#g=" + code + "&p=" + no; }
   function hueColor(no) { return "hsl(" + B.playerHue(no) + " 55% 40%)"; }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -247,28 +292,90 @@ body.printmode #printView { display: block; }
     var ok = function () { done && done(true); }, ng = function () { done && done(false); };
     try { navigator.clipboard.writeText(text).then(ok, ng); } catch (e) { ng(); }
   }
+  function show(id) {
+    ["joinView", "hostView", "cardView"].forEach(function (v) { document.getElementById(v).hidden = v !== id; });
+  }
+  function drawQr(el, url, size) {
+    el.innerHTML = "";
+    if (window.QRCode) new QRCode(el, { text: url, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
+    else el.textContent = "QR を作れませんでした（ネットにつながっていないかもしれません）";
+  }
+  var unwatch = [];
+  function stopWatch() { unwatch.forEach(function (f) { try { f(); } catch (e) {} }); unwatch = []; }
+
+  // ---- 参加（ログイン） ----
+  function showJoin(code, forceForm) {
+    show("joinView");
+    document.title = "ゴルフビンゴ";
+    document.getElementById("joinCode").textContent = code;
+    var seat = load("seat_" + code, null), msg = document.getElementById("joinMsg");
+    msg.textContent = "";
+    var joined = seat && !forceForm;
+    document.getElementById("joinForm").hidden = !!joined;
+    document.getElementById("joinedBox").hidden = !joined;
+    if (joined) {
+      document.getElementById("joinedLabel").textContent = "No." + seat.no + (seat.name ? "（" + seat.name + "）" : "");
+      document.getElementById("joinedOpen").href = "#g=" + code + "&p=" + seat.no;
+    }
+    document.getElementById("btnJoinOther").onclick = function () { showJoin(code, true); };
+    var nameEl = document.getElementById("joinName"), btn = document.getElementById("btnJoin");
+    if (!nameEl.value) nameEl.value = load("myName", "");
+    btn.onclick = function () {
+      var name = nameEl.value.trim();
+      if (!name) { msg.textContent = "名前を入れてください。"; nameEl.focus(); return; }
+      save("myName", name);
+      btn.disabled = true; msg.textContent = "カードを引いています…";
+      var key = forceForm ? deviceKey() + "-" + B.normName(name) : deviceKey();
+      var timer = setTimeout(function () { fallback("記録先から返事がありません。"); }, 8000), done = false;
+      function finish(no, note) {
+        if (done) return; done = true; clearTimeout(timer);
+        save("seat_" + code, { no: no, name: name });
+        var card = load("card_" + code + "_" + no, { marks: {}, name: "" }); card.name = name; save("card_" + code + "_" + no, card);
+        save("note_" + code, note || "");
+        btn.disabled = false;
+        location.hash = "g=" + code + "&p=" + no;
+      }
+      function fallback(why) {
+        if (done) return;
+        var no = 1 + Math.floor(Math.random() * N);
+        finish(no, why + "この端末だけで引いたので、ほかの人と番号が重なることがあります。");
+      }
+      S.join(code, name, key).then(function (r) {
+        if (r.full) { done = true; clearTimeout(timer); btn.disabled = false; msg.textContent = "16 名で満員です。幹事に番号を空けてもらってください。"; return; }
+        finish(r.no, r.reused ? "前に参加した No." + r.no + " を開きました。" : "");
+      }).catch(function (e) { console.error(e); fallback("参加の記録先につながりませんでした。"); });
+    };
+  }
 
   // ---- 幹事 ----
   function showHost(code) {
-    if (!code) { code = load("lastCode", "") || B.newCode(); }
+    if (!code) { code = load("lastCode", "") || B.newCode(); history.replaceState(null, "", "#g=" + code + "&admin"); }
     save("lastCode", code);
-    document.title = "ゴルフビンゴ";
+    show("hostView");
+    document.title = "ゴルフビンゴ（幹事）";
     document.documentElement.style.removeProperty("--mark");
-    document.getElementById("hostView").hidden = false;
-    document.getElementById("cardView").hidden = true;
     document.getElementById("codeShow").textContent = code;
-    var names = load("names_" + code, {});
+
+    var jurl = joinUrl(code);
+    document.getElementById("joinUrl").textContent = jurl;
+    drawQr(document.getElementById("joinQr"), jurl, 200);
+    document.getElementById("btnCopyJoin").onclick = function () {
+      copy("ゴルフビンゴに参加してください（名前を入れるとカードが当たります）\n" + jurl, function (ok) { alert(ok ? "写しました。LINE などに貼ってください。" : "写せませんでした。"); });
+    };
+
+    // 番号ごとの URL（予備）
     var box = document.getElementById("players"); box.innerHTML = "";
     for (var no = 1; no <= N; no++) (function (no) {
       var row = document.createElement("div"); row.className = "player";
-      row.innerHTML = '<div class="num" style="background:' + hueColor(no) + '">' + no + '</div>' +
-        '<input type="text" maxlength="20" placeholder="No.' + no + ' の名前">' +
+      row.innerHTML = '<div class="num" style="background:' + hueColor(no) + '">' + no + '</div><span class="sub">No.' + no + ' のカード</span>' +
         '<a class="btn" href="#g=' + code + '&p=' + no + '">カード</a><button>QR</button>';
-      var inp = row.querySelector("input"); inp.value = names[no] || "";
-      inp.addEventListener("input", function () { names[no] = inp.value.trim(); save("names_" + code, names); });
-      row.querySelector("button").addEventListener("click", function () { openQr(code, no, names[no]); });
+      row.querySelector("button").addEventListener("click", function () { openQr(code, no); });
       box.appendChild(row);
     })(no);
+    document.getElementById("btnCopyAll").onclick = function () {
+      var lines = []; for (var no = 1; no <= N; no++) lines.push("No." + no + "  " + cardUrl(code, no));
+      copy("ゴルフビンゴ（コード " + code + "）\n" + lines.join("\n"), function (ok) { alert(ok ? "写しました。" : "写せませんでした。"); });
+    };
 
     var cards = B.generateCards(code, N), d = B.diversity(cards);
     document.getElementById("stats").innerHTML =
@@ -280,43 +387,72 @@ body.printmode #printView { display: block; }
       "出来事は " + (B.ITEMS.easy.length + B.ITEMS.mid.length + B.ITEMS.hard.length) + " 種から 24 個ずつ選び、" + d.pairs +
       " 組を比べて、同じ位置・同じ列に同じ出来事が来ないように並べています。";
 
-    document.getElementById("btnCopyAll").onclick = function () {
-      var lines = []; for (var no = 1; no <= N; no++) lines.push("No." + no + (names[no] ? " " + names[no] : "") + "  " + cardUrl(code, no));
-      copy("ゴルフビンゴ（コード " + code + "）\n" + lines.join("\n"), function (ok) { alert(ok ? "写しました。LINE などに貼ってください。" : "写せませんでした。"); });
-    };
-    document.getElementById("btnPrint").onclick = function () { renderPrint(code, names); window.print(); };
+    // 参加状況と順位（Firestore から）
+    var seats = {}, remote = {}, err = null;
+    function drawRanking() {
+      var rows = [];
+      Object.keys(seats).forEach(function (k) {
+        var c = remote[k] || {}, s = seats[k];
+        rows.push({ no: +k, name: s.name, bingo: c.bingo || 0, reach: c.reach || 0, marks: c.count || 0 });
+      });
+      var ranked = B.rank(rows), html = "", place = 0, prev = null;
+      ranked.forEach(function (r, i) {
+        if (!prev || prev.bingo !== r.bingo || prev.reach !== r.reach || prev.marks !== r.marks) place = i + 1;
+        prev = r;
+        html += '<div class="player rankrow"><div class="num" style="background:' + hueColor(r.no) + '">' + r.no + '</div>' +
+          '<div><b>' + place + '位　' + esc(r.name) + '</b><br><span class="sub">ビンゴ ' + r.bingo + '・リーチ ' + r.reach + '・' + r.marks + ' マス</span></div>' +
+          '<a class="btn" href="#g=' + code + '&p=' + r.no + '">カード</a><button data-no="' + r.no + '">外す</button></div>';
+      });
+      var free = []; for (var i = 1; i <= N; i++) if (!seats[i]) free.push(i);
+      if (free.length) html += '<p class="sub">空き：' + free.map(function (n) { return "No." + n; }).join("・") + "</p>";
+      document.getElementById("ranking").innerHTML = html || '<p class="sub">まだ誰も参加していません。</p>';
+      document.getElementById("seatCount").textContent = "（" + rows.length + " / " + N + " 名）";
+      document.getElementById("syncNote").textContent = err ? "参加の記録先につながりません。Firebase のルールに「bingo」を足したかを確かめてください。" : "参加すると自動でここに出ます。順位は各自のカードの印から自動で並びます。";
+      Array.prototype.forEach.call(document.querySelectorAll("#ranking button[data-no]"), function (b) {
+        b.onclick = function () {
+          var no = b.getAttribute("data-no");
+          if (!confirm("No." + no + "（" + (seats[no] && seats[no].name) + "）を外して空きにしますか？カードの印はそのまま残ります。")) return;
+          S.release(code, no).catch(function (e) { alert("外せませんでした：" + e.message); });
+        };
+      });
+    }
+    stopWatch();
+    unwatch.push(S.watchSeats(code, function (s, e) { if (e) err = e; else { seats = s; err = null; } drawRanking(); }));
+    unwatch.push(S.watchCards(code, function (c, e) { if (e) err = e; else remote = c; drawRanking(); }));
+    drawRanking();
+
+    document.getElementById("btnPrint").onclick = function () { renderPrint(code, seats); window.print(); };
   }
   function stat(label, val) { return '<div class="stat"><span class="sub">' + esc(label) + '</span><b>' + esc(val) + '</b></div>'; }
 
   document.getElementById("btnNew").addEventListener("click", function () {
-    if (!confirm("新しいコードにすると、カードが全員分変わります。作り直しますか？")) return;
-    var c = B.newCode(); save("lastCode", c); location.hash = "g=" + c;
+    if (!confirm("新しいコードにすると、カードが全員分変わり、参加もやり直しです。作り直しますか？")) return;
+    var c = B.newCode(); save("lastCode", c); location.hash = "g=" + c + "&admin";
   });
   document.getElementById("btnOpenCode").addEventListener("click", function () {
     var c = B.normCode(document.getElementById("codeInput").value);
     if (!c) { alert("コードは英字と数字 3〜12 文字です。"); return; }
-    location.hash = "g=" + c;
+    location.hash = "g=" + c + "&admin";
   });
 
-  function openQr(code, no, name) {
-    var url = cardUrl(code, no), el = document.getElementById("qr");
-    el.innerHTML = "";
-    document.getElementById("qrTitle").textContent = "No." + no + (name ? "　" + name : "") + " のカード";
+  function openQr(code, no) {
+    var url = cardUrl(code, no);
+    document.getElementById("qrTitle").textContent = "No." + no + " のカード";
     document.getElementById("qrUrl").textContent = url;
-    if (window.QRCode) new QRCode(el, { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
-    else el.textContent = "QR を作れませんでした（ネットにつながっていないかもしれません）";
+    drawQr(document.getElementById("qr"), url, 220);
     document.getElementById("qrBg").classList.add("open");
   }
   document.getElementById("qrClose").addEventListener("click", function () { document.getElementById("qrBg").classList.remove("open"); });
 
-  function renderPrint(code, names) {
+  function renderPrint(code, seats) {
     var cards = B.generateCards(code, N), html = "";
+    seats = seats || {};
     for (var page = 0; page < N / 4; page++) {
       html += '<div class="pgrid4' + (page < N / 4 - 1 ? " pbreak" : "") + '">';
       for (var k = 0; k < 4; k++) {
-        var no = page * 4 + k + 1, c = cards[no - 1];
+        var no = page * 4 + k + 1, c = cards[no - 1], nm = seats[no] && seats[no].name;
         html += '<div class="pcard"><div class="ph"><span>⛳ ゴルフビンゴ No.' + no + '</span><span>' +
-          (names[no] ? esc(names[no]) : "名前＿＿＿＿＿＿") + '</span></div><div class="pgrid">';
+          (nm ? esc(nm) : "名前＿＿＿＿＿＿") + '</span></div><div class="pgrid">';
         c.forEach(function (x) {
           html += x === B.FREE ? '<div class="pc free">FREE</div>' : '<div class="pc"><span class="tier">' + stars(x) + '</span>' + esc(x) + '</div>';
         });
@@ -328,23 +464,50 @@ body.printmode #printView { display: block; }
   }
 
   // ---- 各自のカード ----
-  var cur = null; // {code, no, cells, marks}
+  var cur = null;
   function showCard(code, no) {
-    document.getElementById("hostView").hidden = true;
-    document.getElementById("cardView").hidden = false;
+    show("cardView");
     var cells = B.generateCards(code, N)[no - 1];
     var key = "card_" + code + "_" + no;
     cur = { code: code, no: no, cells: cells, key: key, data: load(key, { marks: {}, name: "" }) };
+    var seat = load("seat_" + code, null);
+    if (!cur.data.name && seat && seat.no === no) cur.data.name = seat.name;
     var color = hueColor(no);
     document.documentElement.style.setProperty("--mark", color);
     var badge = document.getElementById("badge"); badge.textContent = "No." + no; badge.style.background = color;
-    document.getElementById("cardCode").textContent = "コード " + code;
+    document.getElementById("cardCode").innerHTML = '<a href="#g=' + code + '&join">コード ' + code + "</a>";
     document.getElementById("letters").innerHTML = COLS.map(function (l) { return '<span style="background:' + color + '">' + l + "</span>"; }).join("");
     var nm = document.getElementById("myName"); nm.value = cur.data.name || "";
-    nm.oninput = function () { cur.data.name = nm.value.trim(); save(cur.key, cur.data); };
-    document.getElementById("backHost").href = "#g=" + code;
+    nm.oninput = function () { cur.data.name = nm.value.trim(); persist(); };
     document.title = "ゴルフビンゴ No." + no;
+    var note = load("note_" + code, "");
+    document.getElementById("resultText").textContent = note; save("note_" + code, "");
     drawCard(-1);
+    setSync("");
+    // 別の端末で付けた印があれば、新しい方を使う
+    var mine = cur;
+    S.loadCard(code, no).then(function (r) {
+      if (cur !== mine) return;
+      if (r && (r.updatedAt || 0) > (cur.data.updatedAt || 0)) {
+        cur.data = { marks: r.marks || {}, name: r.name || cur.data.name, updatedAt: r.updatedAt };
+        save(cur.key, cur.data); nm.value = cur.data.name || ""; drawCard(-1);
+      }
+      setSync(S.init() ? "記録：同期中" : "");
+    }).catch(function () { setSync("記録：この端末だけ"); });
+  }
+  function setSync(t) { document.getElementById("syncState").textContent = t; }
+
+  var pushTimer = null;
+  function persist() {
+    cur.data.updatedAt = Date.now();
+    save(cur.key, cur.data);
+    var c = cur;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(function () {
+      var res = B.evaluate(c.data.marks);
+      S.saveCard(c.code, c.no, { name: c.data.name || "", marks: c.data.marks, bingo: res.bingo.length, reach: res.reach.length, count: res.marks, updatedAt: c.data.updatedAt })
+        .then(function (ok) { if (c === cur) setSync(ok ? "記録：同期済み" : ""); }, function () { if (c === cur) setSync("記録：この端末だけ"); });
+    }, 400);
   }
 
   function drawCard(flashPos) {
@@ -386,20 +549,20 @@ body.printmode #printView { display: block; }
   function setMark(hole) {
     var before = B.evaluate(cur.data.marks).bingo.length;
     cur.data.marks[sheetPos] = { hole: hole || 0, at: Date.now() };
-    save(cur.key, cur.data); closeSheet();
+    persist(); closeSheet();
     var res = drawCard(sheetPos);
     if (res.bingo.length > before && navigator.vibrate) { try { navigator.vibrate([80, 60, 80]); } catch (e) {} }
   }
   document.getElementById("sheetNoHole").addEventListener("click", function () { setMark(0); });
   document.getElementById("sheetCancel").addEventListener("click", closeSheet);
   document.getElementById("sheetUndo").addEventListener("click", function () {
-    delete cur.data.marks[sheetPos]; save(cur.key, cur.data); closeSheet(); drawCard(-1);
+    delete cur.data.marks[sheetPos]; persist(); closeSheet(); drawCard(-1);
   });
   document.getElementById("sheetBg").addEventListener("click", function (e) { if (e.target.id === "sheetBg") closeSheet(); });
 
   document.getElementById("btnReset").addEventListener("click", function () {
     if (!confirm("このカードの印をすべて消します。よろしいですか？")) return;
-    cur.data.marks = {}; save(cur.key, cur.data); drawCard(-1);
+    cur.data.marks = {}; persist(); drawCard(-1);
   });
   document.getElementById("btnResult").addEventListener("click", function () {
     var res = B.evaluate(cur.data.marks), opened = [];
@@ -413,13 +576,22 @@ body.printmode #printView { display: block; }
   });
 
   // ---- 振り分け ----
+  //   #g=コード            参加（ログイン）→ 当たったカードへ
+  //   #g=コード&p=番号     各自のカード
+  //   #g=コード&admin      幹事（URL なしで開いたときも幹事）
+  //   #g=コード&print      印刷の見本
   function route() {
     var h = parseHash(), code = B.normCode(h.g), no = parseInt(h.p, 10);
     document.body.classList.remove("printmode");
-    if (code && no >= 1 && no <= N) showCard(code, no);
+    closeSheet();
+    if (!code || h.admin !== undefined) { showHost(code); }
+    else if (no >= 1 && no <= N) { stopWatch(); showCard(code, no); }
+    else if (h.print !== undefined) { showHost(code); renderPrint(code, {}); document.body.classList.add("printmode"); }
     else {
-      showHost(code);
-      if (code && h.print !== undefined) { renderPrint(code, load("names_" + code, {})); document.body.classList.add("printmode"); }
+      stopWatch();
+      var seat = load("seat_" + code, null);
+      if (seat && h.join === undefined && seat.no >= 1 && seat.no <= N) { location.replace("#g=" + code + "&p=" + seat.no); return; }
+      showJoin(code, false);
     }
     window.scrollTo(0, 0);
   }

@@ -231,6 +231,24 @@
     });
   }
 
+  // ---- 参加（ログイン）で空いている番号をランダムに引く ----
+  function normName(s) {
+    s = String(s || "");
+    try { s = s.normalize("NFKC"); } catch (e) {}
+    return s.replace(/\s+/g, "").toLowerCase();
+  }
+  // seats：{ "番号": {name, key} }。同じ端末（key）か同じ名前なら前の番号を返す。空きが無ければ full
+  function pickSeat(seats, name, key, rand, n) {
+    n = n || 16; rand = rand || Math.random; seats = seats || {};
+    var no, nm = normName(name);
+    for (no in seats) if (seats[no] && key && seats[no].key === key) return { no: +no, reused: true };
+    for (no in seats) if (seats[no] && nm && normName(seats[no].name) === nm) return { no: +no, reused: true };
+    var free = [];
+    for (var i = 1; i <= n; i++) if (!seats[i] && !seats[String(i)]) free.push(i);
+    if (!free.length) return { full: true };
+    return { no: free[Math.floor(rand() * free.length)], reused: false };
+  }
+
   // ゲームコード：読み違えやすい字（0/O・1/I など）を除いた 5 文字
   var CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   function newCode(rand) {
@@ -250,6 +268,6 @@
     ITEMS: ITEMS, PER_CARD: PER_CARD, SIZE: SIZE, CENTER: CENTER, FREE: FREE, LINES: LINES,
     rng: rng, shuffle: shuffle, tierOf: tierOf, fairLayout: fairLayout, compare: compare,
     generateCards: generateCards, diversity: diversity, evaluate: evaluate, rank: rank,
-    newCode: newCode, normCode: normCode, playerHue: playerHue
+    newCode: newCode, normCode: normCode, playerHue: playerHue, pickSeat: pickSeat, normName: normName
   };
 })(typeof window !== "undefined" ? window : this);
