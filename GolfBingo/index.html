@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ゴルフビンゴ</title>
+<meta name="description" content="16 名がそれぞれ違うカードで遊ぶ、ラウンド中のゴルフビンゴ">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="bingo-core.js"></script>
+<style>
+:root {
+  --bg: #f3f6f1; --panel: #ffffff; --ink: #1d2a22; --sub: #5a6b60; --line: #d5ded6;
+  --green: #2f7d4f; --green-ink: #ffffff; --gold: #e0a400; --mark: #2f7d4f; --mark-ink: #ffffff;
+  --free: #fff4cc; --bingo: #e94f37; --shadow: 0 1px 3px rgba(0,0,0,.08);
+  --hue: 200;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121814; --panel: #1b241e; --ink: #e8efe9; --sub: #9db0a3; --line: #2f3d33;
+    --green: #4fae74; --green-ink: #0d1a12; --mark: #4fae74; --mark-ink: #0d1a12;
+    --free: #3b3417; --bingo: #ff7a62; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121814; --panel: #1b241e; --ink: #e8efe9; --sub: #9db0a3; --line: #2f3d33;
+  --green: #4fae74; --green-ink: #0d1a12; --mark: #4fae74; --mark-ink: #0d1a12;
+  --free: #3b3417; --bingo: #ff7a62; --shadow: none;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Meiryo", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+main { max-width: 760px; margin: 0 auto; padding: 16px 16px 48px; }
+h1 { font-size: 1.5rem; margin: 4px 0 2px; }
+h2 { font-size: 1.1rem; margin: 0 0 10px; }
+p { line-height: 1.6; }
+.sub { color: var(--sub); font-size: .9rem; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 14px 0; box-shadow: var(--shadow); }
+button, .btn {
+  font: inherit; font-weight: 700; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  border-radius: 10px; padding: 9px 14px; cursor: pointer; text-decoration: none; display: inline-block; text-align: center;
+}
+button.primary, .btn.primary { background: var(--green); color: var(--green-ink); border-color: var(--green); }
+button:disabled { opacity: .5; cursor: default; }
+input[type=text] {
+  font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%;
+}
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.code { font-size: 1.8rem; font-weight: 800; letter-spacing: .15em; }
+
+/* 幹事：参加者の表 */
+.players { display: grid; grid-template-columns: 1fr; gap: 6px; }
+@media (min-width: 560px) { .players { grid-template-columns: 1fr 1fr; } }
+.player { display: grid; grid-template-columns: 44px 1fr auto auto; gap: 6px; align-items: center; }
+.num { width: 40px; height: 36px; border-radius: 8px; display: grid; place-items: center; font-weight: 800; color: #fff; }
+.player button, .player .btn { padding: 7px 10px; font-size: .85rem; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.stat { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.stat b { font-size: 1.3rem; display: block; }
+
+/* カード */
+.cardhead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.badge { min-width: 64px; padding: 6px 10px; border-radius: 10px; color: #fff; font-weight: 800; text-align: center; font-size: 1.1rem; }
+.grid5 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.letters { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-bottom: 4px; }
+.letters span { text-align: center; font-weight: 800; color: #fff; border-radius: 6px; padding: 3px 0; font-size: 1rem; }
+.cell {
+  position: relative; aspect-ratio: 1 / 1; border: 1.5px solid var(--line); border-radius: 8px; background: var(--panel);
+  display: flex; align-items: center; justify-content: center; text-align: center; padding: 3px;
+  font-size: clamp(9px, 2.55vw, 14px); line-height: 1.25; font-weight: 700; cursor: pointer; user-select: none; word-break: break-all;
+  color: var(--ink);
+}
+.cell .tier { position: absolute; top: 2px; right: 3px; font-size: 9px; color: var(--gold); letter-spacing: -1px; }
+.cell.free { background: var(--free); cursor: default; font-weight: 800; }
+.cell.on { background: var(--mark); color: var(--mark-ink); border-color: var(--mark); }
+.cell.on .tier { color: var(--mark-ink); opacity: .8; }
+.cell .hole { position: absolute; bottom: 2px; left: 0; right: 0; font-size: 9px; opacity: .9; }
+.cell.inbingo { box-shadow: 0 0 0 3px var(--bingo) inset; }
+.cell.flash { animation: pop .35s ease; }
+@keyframes pop { 50% { transform: scale(1.08); } }
+.score { display: flex; gap: 8px; margin: 10px 0; }
+.score .stat { flex: 1; text-align: center; }
+.banner { text-align: center; font-size: 1.6rem; font-weight: 800; color: var(--bingo); margin: 8px 0; min-height: 1.6em; }
+
+/* ホールを選ぶ下の板 */
+.sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; align-items: flex-end; justify-content: center; z-index: 10; }
+.sheet-bg.open { display: flex; }
+.sheet { background: var(--panel); width: 100%; max-width: 520px; border-radius: 16px 16px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
+.holes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 10px 0; }
+.holes button { padding: 10px 0; }
+.qrbox { display: grid; place-items: center; padding: 10px; background: #fff; border-radius: 10px; margin: 10px auto; width: max-content; }
+
+/* 印刷：A4 に 4 枚 */
+#printView { display: none; }
+body.printmode main > :not(#printView) { display: none !important; }
+body.printmode #printView { display: block; }
+.pcard { break-inside: avoid; border: 2px solid #333; border-radius: 10px; padding: 8px; background: #fff; color: #111; }
+.pcard .pgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid #333; border-left: 1px solid #333; }
+.pcard .pc { aspect-ratio: 1/1; border-right: 1px solid #333; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 10px; line-height: 1.2; padding: 2px; font-weight: 700; position: relative; }
+.pcard .pc.free { background: #fff1b8; }
+.pcard .pc .tier { position: absolute; top: 1px; right: 2px; font-size: 7px; color: #b88600; }
+.pcard .ph { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; font-weight: 800; }
+.pgrid4 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10mm; }
+.pcard { min-width: 0; }
+.pgrid4 { margin-bottom: 10mm; }
+@media print {
+  @page { size: A4; margin: 10mm; }
+  body { background: #fff; }
+  main > :not(#printView) { display: none !important; }
+  #printView { display: block !important; }
+  .noprint { display: none !important; }
+  .pgrid4 { gap: 8mm; }
+  .pcard { page-break-inside: avoid; }
+  .pbreak { break-after: page; }
+}
+</style>
+</head>
+<body>
+<main>
+  <!-- 幹事の画面 -->
+  <section id="hostView" hidden>
+    <h1>⛳ ゴルフビンゴ</h1>
+    <p class="sub">16 名それぞれに違うカード。ラウンド中に出来事が起きたらマスを開けて、縦・横・斜めをそろえます。</p>
+
+    <div class="panel">
+      <h2>ゲームコード</h2>
+      <div class="row">
+        <span class="code" id="codeShow"></span>
+        <button id="btnNew">新しく作り直す</button>
+      </div>
+      <p class="sub">同じコードなら、どのスマホでも同じ 16 枚になります。コンペごとに作り直してください。</p>
+      <div class="row">
+        <input type="text" id="codeInput" placeholder="ほかのコードを開く（例：K7Q2M）" style="max-width:240px">
+        <button id="btnOpenCode">開く</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>参加者 16 名</h2>
+      <p class="sub">名前は任意です（この端末にだけ残ります。カードの URL には入りません）。各自に「カード」の URL か QR を渡してください。</p>
+      <div class="players" id="players"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="btnPrint">全員のカードを印刷（A4 に 4 枚）</button>
+        <button id="btnCopyAll">全員の URL を写す</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>16 枚の違い</h2>
+      <div class="stats" id="stats"></div>
+      <p class="sub" id="statsNote"></p>
+    </div>
+
+    <div class="panel">
+      <h2>遊び方</h2>
+      <p>① 各自、自分の番号のカードを開く。<br>
+      ② ラウンド中、マスの出来事ができたらタップ → 何番ホールかを選ぶ（記録が残ります）。<br>
+      ③ 縦・横・斜めの 5 マスがそろえば<b>ビンゴ</b>。真ん中は最初から開いています。<br>
+      ④ 上がりの後、各自の「結果」を見せ合って順位を決めます（ビンゴの本数 → リーチの数 → 開いたマスの数）。</p>
+      <p class="sub">★の数はむずかしさ。どのカードも、やさしい 10・ふつう 9・むずかしい（★★）5 個で、どの列にもやさしいが 1 個以上・むずかしいは 2 個までです。</p>
+    </div>
+  </section>
+
+  <!-- 各自のカード -->
+  <section id="cardView" hidden>
+    <div class="row noprint" style="justify-content:space-between">
+      <a class="btn" id="backHost" href="#">← 幹事の画面</a>
+      <span class="sub" id="cardCode"></span>
+    </div>
+    <div class="panel">
+      <div class="cardhead">
+        <div class="badge" id="badge">No.1</div>
+        <input type="text" id="myName" placeholder="名前（任意）" maxlength="20">
+      </div>
+      <div class="letters" id="letters"></div>
+      <div class="grid5" id="grid"></div>
+      <div class="banner" id="banner"></div>
+      <div class="score">
+        <div class="stat"><span class="sub">ビンゴ</span><b id="sBingo">0</b></div>
+        <div class="stat"><span class="sub">リーチ</span><b id="sReach">0</b></div>
+        <div class="stat"><span class="sub">開いたマス</span><b id="sMarks">0</b></div>
+      </div>
+      <div class="row">
+        <button id="btnResult" class="primary">結果を写す</button>
+        <button id="btnReset">印をすべて消す</button>
+      </div>
+      <p class="sub" id="resultText"></p>
+    </div>
+  </section>
+
+  <!-- 印刷用 -->
+  <section id="printView"></section>
+</main>
+
+<!-- ホールを選ぶ -->
+<div class="sheet-bg" id="sheetBg">
+  <div class="sheet">
+    <b id="sheetTitle"></b>
+    <p class="sub" style="margin:4px 0 0">何番ホールでできましたか？</p>
+    <div class="holes" id="holes"></div>
+    <div class="row">
+      <button class="primary" id="sheetNoHole">ホールは記録しない</button>
+      <button id="sheetUndo" hidden>印を消す</button>
+      <button id="sheetCancel">やめる</button>
+    </div>
+  </div>
+</div>
+
+<!-- QR -->
+<div class="sheet-bg" id="qrBg">
+  <div class="sheet" style="text-align:center">
+    <b id="qrTitle"></b>
+    <div class="qrbox" id="qr"></div>
+    <p class="sub" id="qrUrl" style="word-break:break-all"></p>
+    <button id="qrClose">閉じる</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var B = window.BingoCore, N = 16;
+  var COLS = ["G", "O", "L", "F", "★"];
+
+  // ---- この端末への保存（使えなくても動く） ----
+  function load(key, def) { try { var v = localStorage.getItem("gb_" + key); return v ? JSON.parse(v) : def; } catch (e) { return def; } }
+  function save(key, v) { try { localStorage.setItem("gb_" + key, JSON.stringify(v)); } catch (e) {} }
+
+  function parseHash() {
+    var h = location.hash.replace(/^#/, ""), o = {};
+    h.split("&").forEach(function (kv) { if (!kv) return; var i = kv.indexOf("="); o[decodeURIComponent(i < 0 ? kv : kv.slice(0, i))] = i < 0 ? "" : decodeURIComponent(kv.slice(i + 1)); });
+    return o;
+  }
+  function baseUrl() { return location.href.split("#")[0]; }
+  function cardUrl(code, no) { return baseUrl() + "#g=" + code + "&p=" + no; }
+  function hueColor(no) { return "hsl(" + B.playerHue(no) + " 55% 40%)"; }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function stars(text) { var t = B.tierOf(text); return t === "hard" ? "★★" : t === "mid" ? "★" : ""; }
+  function copy(text, done) {
+    var ok = function () { done && done(true); }, ng = function () { done && done(false); };
+    try { navigator.clipboard.writeText(text).then(ok, ng); } catch (e) { ng(); }
+  }
+
+  // ---- 幹事 ----
+  function showHost(code) {
+    if (!code) { code = load("lastCode", "") || B.newCode(); }
+    save("lastCode", code);
+    document.title = "ゴルフビンゴ";
+    document.documentElement.style.removeProperty("--mark");
+    document.getElementById("hostView").hidden = false;
+    document.getElementById("cardView").hidden = true;
+    document.getElementById("codeShow").textContent = code;
+    var names = load("names_" + code, {});
+    var box = document.getElementById("players"); box.innerHTML = "";
+    for (var no = 1; no <= N; no++) (function (no) {
+      var row = document.createElement("div"); row.className = "player";
+      row.innerHTML = '<div class="num" style="background:' + hueColor(no) + '">' + no + '</div>' +
+        '<input type="text" maxlength="20" placeholder="No.' + no + ' の名前">' +
+        '<a class="btn" href="#g=' + code + '&p=' + no + '">カード</a><button>QR</button>';
+      var inp = row.querySelector("input"); inp.value = names[no] || "";
+      inp.addEventListener("input", function () { names[no] = inp.value.trim(); save("names_" + code, names); });
+      row.querySelector("button").addEventListener("click", function () { openQr(code, no, names[no]); });
+      box.appendChild(row);
+    })(no);
+
+    var cards = B.generateCards(code, N), d = B.diversity(cards);
+    document.getElementById("stats").innerHTML =
+      stat("同じカード", d.duplicates + " 組") +
+      stat("同じ位置に同じ出来事", d.samePosPairs + " 組") +
+      stat("同じ列に 3 個以上同じ", d.lineSimPairs + " 組") +
+      stat("2 枚で重なる出来事", "平均 " + d.avgShared.toFixed(1) + "・最大 " + d.maxShared);
+    document.getElementById("statsNote").textContent =
+      "出来事は " + (B.ITEMS.easy.length + B.ITEMS.mid.length + B.ITEMS.hard.length) + " 種から 24 個ずつ選び、" + d.pairs +
+      " 組を比べて、同じ位置・同じ列に同じ出来事が来ないように並べています。";
+
+    document.getElementById("btnCopyAll").onclick = function () {
+      var lines = []; for (var no = 1; no <= N; no++) lines.push("No." + no + (names[no] ? " " + names[no] : "") + "  " + cardUrl(code, no));
+      copy("ゴルフビンゴ（コード " + code + "）\n" + lines.join("\n"), function (ok) { alert(ok ? "写しました。LINE などに貼ってください。" : "写せませんでした。"); });
+    };
+    document.getElementById("btnPrint").onclick = function () { renderPrint(code, names); window.print(); };
+  }
+  function stat(label, val) { return '<div class="stat"><span class="sub">' + esc(label) + '</span><b>' + esc(val) + '</b></div>'; }
+
+  document.getElementById("btnNew").addEventListener("click", function () {
+    if (!confirm("新しいコードにすると、カードが全員分変わります。作り直しますか？")) return;
+    var c = B.newCode(); save("lastCode", c); location.hash = "g=" + c;
+  });
+  document.getElementById("btnOpenCode").addEventListener("click", function () {
+    var c = B.normCode(document.getElementById("codeInput").value);
+    if (!c) { alert("コードは英字と数字 3〜12 文字です。"); return; }
+    location.hash = "g=" + c;
+  });
+
+  function openQr(code, no, name) {
+    var url = cardUrl(code, no), el = document.getElementById("qr");
+    el.innerHTML = "";
+    document.getElementById("qrTitle").textContent = "No." + no + (name ? "　" + name : "") + " のカード";
+    document.getElementById("qrUrl").textContent = url;
+    if (window.QRCode) new QRCode(el, { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+    else el.textContent = "QR を作れませんでした（ネットにつながっていないかもしれません）";
+    document.getElementById("qrBg").classList.add("open");
+  }
+  document.getElementById("qrClose").addEventListener("click", function () { document.getElementById("qrBg").classList.remove("open"); });
+
+  function renderPrint(code, names) {
+    var cards = B.generateCards(code, N), html = "";
+    for (var page = 0; page < N / 4; page++) {
+      html += '<div class="pgrid4' + (page < N / 4 - 1 ? " pbreak" : "") + '">';
+      for (var k = 0; k < 4; k++) {
+        var no = page * 4 + k + 1, c = cards[no - 1];
+        html += '<div class="pcard"><div class="ph"><span>⛳ ゴルフビンゴ No.' + no + '</span><span>' +
+          (names[no] ? esc(names[no]) : "名前＿＿＿＿＿＿") + '</span></div><div class="pgrid">';
+        c.forEach(function (x) {
+          html += x === B.FREE ? '<div class="pc free">FREE</div>' : '<div class="pc"><span class="tier">' + stars(x) + '</span>' + esc(x) + '</div>';
+        });
+        html += '</div><div style="font-size:9px;margin-top:3px">コード ' + code + '　★＝むずかしさ　できたら○と番手を書く</div></div>';
+      }
+      html += "</div>";
+    }
+    document.getElementById("printView").innerHTML = html;
+  }
+
+  // ---- 各自のカード ----
+  var cur = null; // {code, no, cells, marks}
+  function showCard(code, no) {
+    document.getElementById("hostView").hidden = true;
+    document.getElementById("cardView").hidden = false;
+    var cells = B.generateCards(code, N)[no - 1];
+    var key = "card_" + code + "_" + no;
+    cur = { code: code, no: no, cells: cells, key: key, data: load(key, { marks: {}, name: "" }) };
+    var color = hueColor(no);
+    document.documentElement.style.setProperty("--mark", color);
+    var badge = document.getElementById("badge"); badge.textContent = "No." + no; badge.style.background = color;
+    document.getElementById("cardCode").textContent = "コード " + code;
+    document.getElementById("letters").innerHTML = COLS.map(function (l) { return '<span style="background:' + color + '">' + l + "</span>"; }).join("");
+    var nm = document.getElementById("myName"); nm.value = cur.data.name || "";
+    nm.oninput = function () { cur.data.name = nm.value.trim(); save(cur.key, cur.data); };
+    document.getElementById("backHost").href = "#g=" + code;
+    document.title = "ゴルフビンゴ No." + no;
+    drawCard(-1);
+  }
+
+  function drawCard(flashPos) {
+    var res = B.evaluate(cur.data.marks), inBingo = {};
+    res.bingo.forEach(function (li) { B.LINES[li].forEach(function (p) { inBingo[p] = true; }); });
+    var g = document.getElementById("grid"); g.innerHTML = "";
+    cur.cells.forEach(function (x, pos) {
+      var d = document.createElement("div"), m = cur.data.marks[pos];
+      d.className = "cell" + (x === B.FREE ? " free" : "") + (m ? " on" : "") + (inBingo[pos] ? " inbingo" : "") + (pos === flashPos ? " flash" : "");
+      if (x === B.FREE) d.textContent = "FREE";
+      else {
+        d.innerHTML = '<span class="tier">' + stars(x) + "</span>" + esc(x) + (m && m.hole ? '<span class="hole">' + m.hole + "番</span>" : "");
+        d.addEventListener("click", function () { openSheet(pos); });
+      }
+      g.appendChild(d);
+    });
+    document.getElementById("sBingo").textContent = res.bingo.length;
+    document.getElementById("sReach").textContent = res.reach.length;
+    document.getElementById("sMarks").textContent = res.marks + " / 24";
+    document.getElementById("banner").textContent =
+      res.bingo.length >= 2 ? "🎉 ビンゴ × " + res.bingo.length + "！" : res.bingo.length === 1 ? "🎉 ビンゴ！" : res.reach.length ? "リーチ！" : "";
+    return res;
+  }
+
+  var sheetPos = -1;
+  (function buildHoles() {
+    var h = document.getElementById("holes");
+    for (var i = 1; i <= 18; i++) (function (i) {
+      var b = document.createElement("button"); b.textContent = i; b.addEventListener("click", function () { setMark(i); }); h.appendChild(b);
+    })(i);
+  })();
+  function openSheet(pos) {
+    sheetPos = pos;
+    document.getElementById("sheetTitle").textContent = cur.cells[pos];
+    document.getElementById("sheetUndo").hidden = !cur.data.marks[pos];
+    document.getElementById("sheetBg").classList.add("open");
+  }
+  function closeSheet() { document.getElementById("sheetBg").classList.remove("open"); }
+  function setMark(hole) {
+    var before = B.evaluate(cur.data.marks).bingo.length;
+    cur.data.marks[sheetPos] = { hole: hole || 0, at: Date.now() };
+    save(cur.key, cur.data); closeSheet();
+    var res = drawCard(sheetPos);
+    if (res.bingo.length > before && navigator.vibrate) { try { navigator.vibrate([80, 60, 80]); } catch (e) {} }
+  }
+  document.getElementById("sheetNoHole").addEventListener("click", function () { setMark(0); });
+  document.getElementById("sheetCancel").addEventListener("click", closeSheet);
+  document.getElementById("sheetUndo").addEventListener("click", function () {
+    delete cur.data.marks[sheetPos]; save(cur.key, cur.data); closeSheet(); drawCard(-1);
+  });
+  document.getElementById("sheetBg").addEventListener("click", function (e) { if (e.target.id === "sheetBg") closeSheet(); });
+
+  document.getElementById("btnReset").addEventListener("click", function () {
+    if (!confirm("このカードの印をすべて消します。よろしいですか？")) return;
+    cur.data.marks = {}; save(cur.key, cur.data); drawCard(-1);
+  });
+  document.getElementById("btnResult").addEventListener("click", function () {
+    var res = B.evaluate(cur.data.marks), opened = [];
+    Object.keys(cur.data.marks).sort(function (a, b) { return a - b; }).forEach(function (p) {
+      var m = cur.data.marks[p]; opened.push(cur.cells[p] + (m.hole ? "（" + m.hole + "番）" : ""));
+    });
+    var text = "ゴルフビンゴ " + cur.code + " No." + cur.no + (cur.data.name ? " " + cur.data.name : "") +
+      "：ビンゴ " + res.bingo.length + "・リーチ " + res.reach.length + "・" + res.marks + " マス\n" + opened.join("、");
+    document.getElementById("resultText").textContent = text;
+    copy(text, function (ok) { if (ok) document.getElementById("resultText").textContent = text + "\n（写しました）"; });
+  });
+
+  // ---- 振り分け ----
+  function route() {
+    var h = parseHash(), code = B.normCode(h.g), no = parseInt(h.p, 10);
+    document.body.classList.remove("printmode");
+    if (code && no >= 1 && no <= N) showCard(code, no);
+    else {
+      showHost(code);
+      if (code && h.print !== undefined) { renderPrint(code, load("names_" + code, {})); document.body.classList.add("printmode"); }
+    }
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener("hashchange", route);
+  route();
+  window.__bingo = { route: route, get cur() { return cur; } };
+})();
+</script>
+</body>
+</html>
