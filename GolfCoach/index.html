@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AIゴルフコーチ</title>
+<meta name="description" content="コーチのレッスンのホワイトボード 54 回を学んだ AI のゴルフコーチ">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --ink: #1d2733; --muted: #5d6b7a; --line: #d5dbe2;
+  --board: #fbfcfd; --board-frame: #9aa5b1; --marker: #1f2a37; --red: #d02f2f; --blue: #1f5fbf;
+  --accent: #1f6f4a; --accent-ink: #ffffff; --user: #e3f1ea; --warn: #8a5a00; --warn-bg: #fff4dc;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --panel: #1a2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2d3742;
+    --board: #1e262f; --board-frame: #4a5562; --marker: #eef2f6; --red: #ff6b6b; --blue: #7fb2ff;
+    --accent: #3fa877; --accent-ink: #0b1510; --user: #1f3a2d; --warn: #f3c36b; --warn-bg: #33290f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --panel: #1a2129; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2d3742;
+  --board: #1e262f; --board-frame: #4a5562; --marker: #eef2f6; --red: #ff6b6b; --blue: #7fb2ff;
+  --accent: #3fa877; --accent-ink: #0b1510; --user: #1f3a2d; --warn: #f3c36b; --warn-bg: #33290f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif; font-size: 16px; line-height: 1.6; }
+header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+.top { max-width: 760px; margin: 0 auto; padding: 10px 16px 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.top h1 { font-family: "Klee One", serif; font-size: 22px; margin: 0; }
+.top .sub { color: var(--muted); font-size: 13px; }
+nav { max-width: 760px; margin: 0 auto; display: flex; gap: 4px; padding: 6px 12px 0; }
+nav button { flex: 1; border: 0; background: none; color: var(--muted); padding: 8px 4px 10px; font: inherit; font-size: 15px; border-bottom: 3px solid transparent; cursor: pointer; }
+nav button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+main { max-width: 760px; margin: 0 auto; padding: 12px 16px 140px; }
+section[hidden] { display: none; }
+.mode { font-size: 13px; color: var(--muted); margin: 4px 0 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pill { display: inline-block; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); }
+.pill.ai { border-color: var(--accent); color: var(--accent); }
+.note { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin: 8px 0 12px; }
+.msg-user { margin: 14px 0 8px auto; max-width: 88%; width: fit-content; background: var(--user); padding: 10px 14px; border-radius: 14px 14px 4px 14px; white-space: pre-wrap; word-break: break-word; }
+.board { position: relative; margin: 8px 0 18px; background: var(--board); border: 8px solid var(--board-frame); border-radius: 6px; padding: 16px 16px 14px; box-shadow: 0 2px 0 rgba(0,0,0,.08) inset, 0 2px 8px rgba(0,0,0,.06);
+  font-family: "Klee One", "Hiragino Mincho ProN", serif; color: var(--marker); font-size: 17px; line-height: 1.75; word-break: break-word; }
+.board::after { content: ""; position: absolute; left: 18%; right: 18%; bottom: -14px; height: 6px; background: var(--board-frame); border-radius: 0 0 4px 4px; }
+.board .who { font-family: system-ui, sans-serif; font-size: 12px; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; }
+.b-theme { font-weight: 600; font-size: 19px; margin-top: 4px; }
+.b-step { padding-left: .6em; }
+.b-eq { padding-left: 2.2em; color: var(--blue); }
+.b-why { margin-top: 4px; color: var(--blue); }
+.b-ref { margin-top: 8px; font-family: system-ui, sans-serif; font-size: 12px; color: var(--muted); }
+.b-general { font-family: system-ui, sans-serif; font-size: 14px; color: var(--muted); }
+.b-head { font-weight: 600; margin-top: 6px; }
+.b-gap { height: .5em; }
+.red { color: var(--red); font-weight: 600; text-decoration: underline; text-decoration-color: var(--red); text-underline-offset: 4px; }
+.b-tablewrap { overflow-x: auto; margin: 6px 0; }
+.b-table { border-collapse: collapse; font-family: system-ui, sans-serif; font-size: 14px; min-width: 100%; }
+.b-table th, .b-table td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+.b-table th { background: var(--bg); }
+.usage { font-family: system-ui, sans-serif; font-size: 11px; color: var(--muted); margin-top: 6px; }
+.err { color: var(--red); font-family: system-ui, sans-serif; font-size: 14px; }
+.typing::after { content: "▍"; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.composer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 8px 16px calc(10px + env(safe-area-inset-bottom)); z-index: 6; }
+.composer .in { max-width: 728px; margin: 0 auto; }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+.chips button { flex: none; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.row { display: flex; gap: 8px; align-items: flex-end; }
+textarea { flex: 1; min-width: 0; resize: none; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; max-height: 40vh; }
+.btn { border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 12px; padding: 10px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.sub { background: var(--bg); color: var(--ink); border: 1px solid var(--line); font-weight: 400; }
+.empty { color: var(--muted); text-align: center; padding: 24px 8px; }
+/* 板の一覧 */
+.search { width: 100%; font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; }
+details.lesson { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; }
+details.lesson summary { cursor: pointer; padding: 10px 12px; list-style: none; display: flex; gap: 10px; }
+details.lesson summary::-webkit-details-marker { display: none; }
+details.lesson .d { flex: none; width: 6.6em; color: var(--muted); font-size: 14px; }
+details.lesson .t { flex: 1; min-width: 0; }
+details.lesson .board { margin: 0 10px 18px; font-size: 16px; }
+.unsure { font-size: 13px; color: var(--muted); padding: 0 14px 12px; white-space: pre-wrap; }
+/* 設定 */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+.card h2 { font-size: 16px; margin: 0 0 8px; }
+label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+input[type="password"], input[type="text"], select { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.check { display: flex; gap: 8px; align-items: center; color: var(--ink); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+small { color: var(--muted); }
+@media (max-width: 480px) { .board { border-width: 6px; padding: 12px; font-size: 16px; } details.lesson .d { width: 5.6em; font-size: 13px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><h1>AIゴルフコーチ</h1><span class="sub">レッスンのホワイトボード 54 回から</span></div>
+  <nav role="tablist">
+    <button role="tab" data-tab="chat" aria-selected="true">相談</button>
+    <button role="tab" data-tab="lessons" aria-selected="false">板の一覧</button>
+    <button role="tab" data-tab="settings" aria-selected="false">設定</button>
+  </nav>
+</header>
+<main>
+  <section id="tab-chat">
+    <div class="mode"><span id="modePill" class="pill"></span><button id="newChat" class="btn sub" style="padding:4px 10px;font-size:13px">新しい相談</button></div>
+    <div id="noKey" class="note" hidden>API キーが無いので「板から探す」で答えます（悩みの言葉に合う板の処方を出します）。AI の答えにするには「設定」で API キーを入れてください。</div>
+    <div id="thread"></div>
+  </section>
+  <section id="tab-lessons" hidden>
+    <input id="q" class="search" type="search" placeholder="言葉で絞る（例：最下点・脱力・パター）">
+    <div id="lessonList"></div>
+  </section>
+  <section id="tab-settings" hidden>
+    <div class="card">
+      <h2>AI の答え（Claude）</h2>
+      <label for="apiKey">Anthropic の API キー</label>
+      <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
+      <small>キーはこの端末のブラウザにだけ保存し、Anthropic の API へ直接送ります。人と共有する端末では入れないでください。使った分の料金はキーの持ち主にかかります。</small>
+      <label for="model">モデル</label>
+      <select id="model"></select>
+      <label for="effort">考える深さ</label>
+      <select id="effort">
+        <option value="low">浅い（速い・安い）</option>
+        <option value="medium">ふつう</option>
+        <option value="high">深い（遅い・高い）</option>
+      </select>
+      <label class="check"><input id="showUsage" type="checkbox"> 答えの下に使ったトークン数を出す</label>
+      <div class="btns"><button id="save" class="btn">保存</button><button id="forgetKey" class="btn sub">キーを消す</button></div>
+      <div id="saved" class="usage"></div>
+    </div>
+    <div class="card">
+      <h2>この端末の記録</h2>
+      <small>相談の記録はこの端末のブラウザにだけ残ります。</small>
+      <div class="btns"><button id="clearChat" class="btn sub">相談の記録を消す</button></div>
+    </div>
+    <div class="card">
+      <h2>このアプリについて</h2>
+      <small>コーチ本人ではなく、コーチが生徒さんに書いたレッスンのホワイトボード 54 枚（2025/10〜2026/10）の書き起こしと分析を学んだ AI です。手書きの読み取りに自信のない字は「板の一覧」で〔?〕を付けています。</small>
+    </div>
+  </section>
+</main>
+<div class="composer" id="composer">
+  <div class="in">
+    <div class="chips" id="chips"></div>
+    <div class="row">
+      <textarea id="input" rows="2" placeholder="例：7 番アイアンでダフリとトップが交互に出ます"></textarea>
+      <button id="send" class="btn">送る</button>
+    </div>
+  </div>
+</div>
+
+<script src="coach-data.js"></script>
+<script src="coach-core.js"></script>
+<script src="store.js"></script>
+<script type="module">
+const C = window.CoachCore, S = window.CoachStore, DATA = window.COACH_DATA;
+const SDK_URL = "https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.8.0/+esm";
+const SYSTEM = C.buildSystem(DATA);
+const $ = (id) => document.getElementById(id);
+
+let settings = S.settings();
+let history = S.history();
+let log = S.log();
+let busy = false;
+let Anthropic = null;
+
+// ---- タブ ----
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+function showTab(name) {
+  document.querySelectorAll("nav button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  ["chat", "lessons", "settings"].forEach((t) => { $("tab-" + t).hidden = t !== name; });
+  $("composer").hidden = name !== "chat";
+}
+
+// ---- 相談 ----
+function refreshMode() {
+  const on = !!settings.apiKey;
+  const pill = $("modePill");
+  pill.textContent = on ? "AI：" + C.modelInfo(settings.model).label.replace(/（.*）/, "") : "板から探す（API キーなし）";
+  pill.className = "pill" + (on ? " ai" : "");
+  $("noKey").hidden = on;
+}
+
+function boardEl(md, meta) {
+  const d = document.createElement("div");
+  d.className = "board";
+  d.innerHTML = '<div class="who"><span>AIゴルフコーチ</span><span>' + C.esc(meta || "") + '</span></div><div class="body"></div>';
+  d.querySelector(".body").innerHTML = C.renderBoard(md);
+  return d;
+}
+function userEl(text) { const d = document.createElement("div"); d.className = "msg-user"; d.textContent = text; return d; }
+
+function renderThread() {
+  const th = $("thread");
+  th.innerHTML = "";
+  if (!log.length) {
+    th.innerHTML = '<div class="empty">ゴルフの悩みを書いてください。<br>答えはコーチの板の形（☆テーマ → ↳ 動き → Q なぜ）で返ります。</div>';
+    return;
+  }
+  log.forEach((m) => th.appendChild(m.role === "user" ? userEl(m.text) : boardEl(m.text, m.meta)));
+}
+
+function scrollDown() { window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); }
+
+function push(item) { log.push(item); S.saveLog(log); }
+
+async function loadSdk() {
+  if (!Anthropic) Anthropic = (await import(SDK_URL)).default;
+  return Anthropic;
+}
+
+async function send(text) {
+  text = text.trim();
+  if (!text || busy) return;
+  busy = true; $("send").disabled = true;
+  if (!log.length) $("thread").innerHTML = "";
+  push({ role: "user", text });
+  $("thread").appendChild(userEl(text));
+  $("input").value = "";
+
+  if (!settings.apiKey) {
+    const md = C.offlineBoard(text, DATA);
+    push({ role: "coach", text: md, meta: "板から探す" });
+    $("thread").appendChild(boardEl(md, "板から探す"));
+    busy = false; $("send").disabled = false; scrollDown();
+    return;
+  }
+
+  const model = C.modelInfo(settings.model);
+  const el = boardEl("", model.label.replace(/（.*）/, ""));
+  const body = el.querySelector(".body");
+  body.classList.add("typing");
+  $("thread").appendChild(el); scrollDown();
+
+  history.push({ role: "user", content: text });
+  let acc = "";
+  try {
+    const SDK = await loadSdk();
+    const client = new SDK({ apiKey: settings.apiKey, dangerouslyAllowBrowser: true });
+    const stream = client.beta.messages.stream(C.buildRequest({ model: model.id, effort: settings.effort, system: SYSTEM, history }));
+    stream.on("text", (delta) => { acc += delta; body.innerHTML = C.renderBoard(acc); });
+    const msg = await stream.finalMessage();
+    body.classList.remove("typing");
+    if (msg.stop_reason === "refusal") {
+      history.pop();
+      body.innerHTML = '<div class="err">この相談には答えられませんでした。言い方を変えて聞いてみてください。</div>';
+    } else {
+      const shown = C.textOf(msg) || acc;
+      body.innerHTML = C.renderBoard(shown);
+      if (msg.stop_reason === "max_tokens") body.insertAdjacentHTML("beforeend", '<div class="err">（長くなったので途中で止まりました）</div>');
+      history.push({ role: "assistant", content: msg.content }); // 考えた跡も含め、そのまま返す
+      S.saveHistory(history);
+      const u = msg.usage || {};
+      const meta = (msg.model && msg.model !== model.id) ? msg.model : model.label.replace(/（.*）/, "");
+      push({ role: "coach", text: shown, meta });
+      if (settings.showUsage) {
+        body.insertAdjacentHTML("beforeend", '<div class="usage">入力 ' + (u.input_tokens || 0) + "・キャッシュから " + (u.cache_read_input_tokens || 0) +
+          "・キャッシュへ " + (u.cache_creation_input_tokens || 0) + "・出力 " + (u.output_tokens || 0) + "</div>");
+      }
+    }
+  } catch (e) {
+    history.pop();
+    body.classList.remove("typing");
+    body.innerHTML = (acc ? C.renderBoard(acc) : "") + '<div class="err">' + C.esc(errorText(e)) + "</div>";
+  } finally {
+    busy = false; $("send").disabled = false; scrollDown();
+  }
+}
+
+function errorText(e) {
+  const A = Anthropic;
+  if (A && e instanceof A.AuthenticationError) return "API キーが正しくないようです。「設定」で確かめてください。";
+  if (A && e instanceof A.PermissionDeniedError) return "この API キーでは使えないモデルです。「設定」でモデルを変えてみてください。";
+  if (A && e instanceof A.RateLimitError) return "込み合っています。少し待ってから、もう一度送ってください。";
+  if (A && e instanceof A.APIConnectionError) return "通信できませんでした。電波を確かめて、もう一度送ってください。";
+  if (A && e instanceof A.APIError) return "エラーになりました（" + (e.status || "") + "）。もう一度送ってください。";
+  if (String(e && e.message || "").indexOf("import") >= 0) return "AI の部品を読み込めませんでした。通信を確かめてください。";
+  return "エラーになりました：" + (e && e.message || e);
+}
+
+$("send").addEventListener("click", () => send($("input").value));
+$("input").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); send($("input").value); } });
+$("newChat").addEventListener("click", () => { if (busy) return; history = []; log = []; S.clearChat(); renderThread(); });
+C.QUICK.forEach((q) => {
+  const b = document.createElement("button"); b.textContent = q.label;
+  b.addEventListener("click", () => { $("input").value = q.text; $("input").focus(); });
+  $("chips").appendChild(b);
+});
+
+// ---- 板の一覧 ----
+function renderLessons(filter) {
+  const f = (filter || "").trim();
+  const list = DATA.lessons.filter((l) => !f || (l.theme + "\n" + l.board).indexOf(f) >= 0);
+  const box = $("lessonList");
+  box.innerHTML = list.length ? "" : '<div class="empty">合う板がありません</div>';
+  list.slice().reverse().forEach((l) => {
+    const d = document.createElement("details"); d.className = "lesson";
+    d.innerHTML = '<summary><span class="d">' + C.esc(l.date + (l.unsureDate ? "?" : "")) + "(" + C.esc(l.wd) + ')</span><span class="t">' + C.esc(l.theme) + "</span></summary>";
+    d.appendChild(boardEl(l.board, "No." + l.no));
+    if (l.unsure && l.unsure !== "なし") { const u = document.createElement("div"); u.className = "unsure"; u.textContent = "読めない所：" + l.unsure; d.appendChild(u); }
+    box.appendChild(d);
+  });
+}
+$("q").addEventListener("input", (ev) => renderLessons(ev.target.value));
+
+// ---- 設定 ----
+C.MODELS.forEach((m) => { const o = document.createElement("option"); o.value = m.id; o.textContent = m.label; $("model").appendChild(o); });
+function fillSettings() {
+  $("apiKey").value = settings.apiKey || "";
+  $("model").value = settings.model || C.DEFAULT_MODEL;
+  $("effort").value = settings.effort || "medium";
+  $("showUsage").checked = !!settings.showUsage;
+}
+$("save").addEventListener("click", () => {
+  settings = { apiKey: $("apiKey").value.trim(), model: $("model").value, effort: $("effort").value, showUsage: $("showUsage").checked };
+  const ok = S.saveSettings(settings);
+  $("saved").textContent = ok ? "保存しました。" : "この端末では保存できませんでした（このページを開いている間だけ使えます）。";
+  refreshMode();
+});
+$("forgetKey").addEventListener("click", () => { settings.apiKey = ""; S.saveSettings(settings); fillSettings(); refreshMode(); $("saved").textContent = "キーを消しました。"; });
+$("clearChat").addEventListener("click", () => { history = []; log = []; S.clearChat(); renderThread(); $("saved").textContent = "相談の記録を消しました。"; });
+
+fillSettings(); refreshMode(); renderThread(); renderLessons("");
+window.__coach = { send, state: () => ({ history, log, settings }) }; // 試験用
+</script>
+</body>
+</html>
