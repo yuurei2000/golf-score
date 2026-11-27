@@ -108,6 +108,17 @@ input[type=text] {
 .holes button { padding: 10px 0; }
 .qrbox { display: grid; place-items: center; padding: 10px; background: #fff; border-radius: 10px; margin: 10px auto; width: max-content; }
 
+/* 速報 */
+#toasts { position: fixed; top: calc(8px + env(safe-area-inset-top)); left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; z-index: 20; pointer-events: none; padding: 0 16px; }
+.toast { background: var(--panel); color: var(--ink); border: 2px solid var(--bingo); border-radius: 12px; padding: 10px 14px; font-weight: 800; box-shadow: 0 4px 16px rgba(0,0,0,.18); max-width: 520px; width: 100%; text-align: center; animation: toastIn .3s ease; }
+.toast.reach { border-color: var(--gold); }
+.toast.miss { border-color: var(--miss-ink); }
+.toast.out { opacity: 0; transition: opacity .4s; }
+@keyframes toastIn { from { transform: translateY(-12px); opacity: 0; } }
+/* ミス大賞 */
+.award { border: 2px dashed var(--miss-ink); background: var(--miss-bg); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+.award b { color: var(--miss-ink); }
+
 /* 印刷：A4 に 4 枚 */
 #printView { display: none; }
 body.printmode main > :not(#printView) { display: none !important; }
@@ -160,7 +171,7 @@ body.printmode #printView { display: block; }
     </div>
     <div class="panel">
       <h2>遊び方</h2>
-      <p style="margin:0">ラウンド中、マスの出来事ができたらタップ → 何番ホールかを選びます。赤い「ミス」のマス（OB・3パット・空振り など）は、やってしまったら開けられます。縦・横・斜めの 5 マスがそろえば<b>ビンゴ</b>。真ん中は最初から開いています。順位はビンゴの本数 → リーチの数 → 開いたマスの数です。</p>
+      <p style="margin:0">ラウンド中、マスの出来事ができたらタップ → 何番ホールかを選びます。赤い「ミス」のマス（OB・3パット・空振り など）は、やってしまったら開けられます。縦・横・斜めの 5 マスがそろえば<b>ビンゴ</b>。真ん中は最初から開いています。誰かがビンゴ・リーチになると速報が出ます。ミスをいちばん多く開けた人は「ミス大賞」。順位はビンゴの本数 → リーチの数 → 開いたマスの数です。</p>
     </div>
   </section>
 
@@ -212,7 +223,7 @@ body.printmode #printView { display: block; }
       <h2>16 枚の違い</h2>
       <div class="stats" id="stats"></div>
       <p class="sub" id="statsNote"></p>
-      <p class="sub">スコア 100 前後の人向け。「ミス」のマス（OB・3パット・空振り など）は、やってしまったら開けます。★の数はむずかしさ。どのカードも、やさしい 8・ミス 7・ふつう（★）6・むずかしい（★★）3 個で、どの列にもやさしいが 1 個以上・むずかしいは 1 個まで・ミスは 3 個までです。</p>
+      <p class="sub">スコア 100 前後の人向け。「ミス」のマス（OB・3パット・空振り など）は、やってしまったら開けます。★の数はむずかしさ。どのカードも、やさしい 8・ミス 7・ふつう（★）6・むずかしい（★★）3 個で、どの列にもやさしいが 1 個以上・むずかしいは 1 個まで・ミスは 3 個までです。誰かがビンゴ・リーチになると全員の画面に速報が出ます。赤い「ミス」のマスをいちばん多く開けた人が「ミス大賞」です。</p>
     </div>
   </section>
 
@@ -246,6 +257,8 @@ body.printmode #printView { display: block; }
   <!-- 印刷用 -->
   <section id="printView"></section>
 </main>
+
+<div id="toasts" aria-live="polite"></div>
 
 <!-- ホールを選ぶ -->
 <div class="sheet-bg" id="sheetBg">
@@ -308,6 +321,43 @@ body.printmode #printView { display: block; }
     el.innerHTML = "";
     if (window.QRCode) new QRCode(el, { text: url, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
     else el.textContent = "QR を作れませんでした（ネットにつながっていないかもしれません）";
+  }
+  // 速報：画面の上に数秒出す
+  function toast(text, kind) {
+    var box = document.getElementById("toasts"), el = document.createElement("div");
+    el.className = "toast " + (kind || ""); el.textContent = text;
+    box.appendChild(el);
+    while (box.children.length > 3) box.removeChild(box.firstChild);
+    if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) {} }
+    setTimeout(function () { el.classList.add("out"); }, 4200);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4700);
+  }
+  function who(no, name) { return "No." + no + (name ? " " + name + "さん" : ""); }
+  // 全員の記録を見張り、ビンゴ・リーチ・ミス大賞の交代を速報する（最初に読んだ分は速報しない）
+  function watchNews(code, myNo, onData) {
+    var cards = B.generateCards(code, N), base = null, awardKey = null;
+    return S.watchCards(code, function (c, e) {
+      if (e) { onData && onData(null, e); return; }
+      var next = {}, rows = [];
+      Object.keys(c).forEach(function (no) {
+        var d = c[no] || {};
+        next[no] = { name: d.name || "", bingo: d.bingo || 0, reach: d.reach || 0 };
+        if (cards[no - 1]) rows.push({ no: +no, name: d.name || "", miss: B.missCount(cards[no - 1], d.marks) });
+      });
+      var aw = B.missAward(rows), key = aw.winners.map(function (r) { return r.no; }).join(",");
+      if (base) {
+        B.newsEvents(base, next).forEach(function (ev) {
+          if (ev.no === myNo) return; // 自分のビンゴは自分の画面に大きく出る
+          if (ev.type === "bingo") toast("🎉 " + who(ev.no, ev.name) + (ev.count >= 2 ? " ビンゴ × " + ev.count + "！" : " ビンゴ！"), "bingo");
+          else toast("🔥 " + who(ev.no, ev.name) + " リーチ！", "reach");
+        });
+        if (key && key !== awardKey && aw.max >= 2) {
+          toast("😅 ミス大賞は " + aw.winners.map(function (r) { return who(r.no, r.name); }).join("・") + "（ミス " + aw.max + "）", "miss");
+        }
+      }
+      base = next; awardKey = key;
+      onData && onData(c);
+    });
   }
   var unwatch = [];
   function stopWatch() { unwatch.forEach(function (f) { try { f(); } catch (e) {} }); unwatch = []; }
@@ -402,19 +452,23 @@ body.printmode #printView { display: block; }
       var rows = [];
       Object.keys(seats).forEach(function (k) {
         var c = remote[k] || {}, s = seats[k];
-        rows.push({ no: +k, name: s.name, bingo: c.bingo || 0, reach: c.reach || 0, marks: c.count || 0 });
+        rows.push({ no: +k, name: s.name, bingo: c.bingo || 0, reach: c.reach || 0, marks: c.count || 0, miss: B.missCount(cards[k - 1], c.marks) });
       });
       var ranked = B.rank(rows), html = "", place = 0, prev = null;
       ranked.forEach(function (r, i) {
         if (!prev || prev.bingo !== r.bingo || prev.reach !== r.reach || prev.marks !== r.marks) place = i + 1;
         prev = r;
         html += '<div class="player rankrow"><div class="num" style="background:' + hueColor(r.no) + '">' + r.no + '</div>' +
-          '<div><b>' + place + '位　' + esc(r.name) + '</b><br><span class="sub">ビンゴ ' + r.bingo + '・リーチ ' + r.reach + '・' + r.marks + ' マス</span></div>' +
+          '<div><b>' + place + '位　' + esc(r.name) + '</b><br><span class="sub">ビンゴ ' + r.bingo + '・リーチ ' + r.reach + '・' + r.marks + ' マス・ミス ' + r.miss + '</span></div>' +
           '<a class="btn" href="#g=' + code + '&p=' + r.no + '">カード</a><button data-no="' + r.no + '">外す</button></div>';
       });
       var free = []; for (var i = 1; i <= N; i++) if (!seats[i]) free.push(i);
       if (free.length) html += '<p class="sub">空き：' + free.map(function (n) { return "No." + n; }).join("・") + "</p>";
-      document.getElementById("ranking").innerHTML = html || '<p class="sub">まだ誰も参加していません。</p>';
+      var aw = B.missAward(rows);
+      var awardHtml = rows.length ? '<div class="award">😅 <b>ミス大賞</b>　' + (aw.winners.length
+        ? aw.winners.map(function (r) { return esc(r.name) + "さん（No." + r.no + "）"; }).join("・") + "　ミス " + aw.max + " マス"
+        : "まだいません（赤い「ミス」のマスをいちばん多く開けた人）") + "</div>" : "";
+      document.getElementById("ranking").innerHTML = html ? awardHtml + html : '<p class="sub">まだ誰も参加していません。</p>';
       document.getElementById("seatCount").textContent = "（" + rows.length + " / " + N + " 名）";
       document.getElementById("syncNote").textContent = err ? "参加の記録先につながりません。Firebase のルールに「bingo」を足したかを確かめてください。" : "参加すると自動でここに出ます。順位は各自のカードの印から自動で並びます。";
       Array.prototype.forEach.call(document.querySelectorAll("#ranking button[data-no]"), function (b) {
@@ -427,7 +481,7 @@ body.printmode #printView { display: block; }
     }
     stopWatch();
     unwatch.push(S.watchSeats(code, function (s, e) { if (e) err = e; else { seats = s; err = null; } drawRanking(); }));
-    unwatch.push(S.watchCards(code, function (c, e) { if (e) err = e; else remote = c; drawRanking(); }));
+    unwatch.push(watchNews(code, 0, function (c, e) { if (e) err = e; else remote = c; drawRanking(); }));
     drawRanking();
 
     document.getElementById("btnPrint").onclick = function () { renderPrint(code, seats); window.print(); };
@@ -493,6 +547,8 @@ body.printmode #printView { display: block; }
     document.getElementById("resultText").textContent = note; save("note_" + code, "");
     drawCard(-1);
     setSync("");
+    stopWatch();
+    unwatch.push(watchNews(code, no));
     // 別の端末で付けた印があれば、新しい方を使う
     var mine = cur;
     S.loadCard(code, no).then(function (r) {

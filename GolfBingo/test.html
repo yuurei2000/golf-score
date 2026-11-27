@@ -122,6 +122,31 @@ t("参加：同じ名前（空白・全角半角の違いは同じ）なら同�
   return r.no === 9 && r.reused && r2.no === 3 || JSON.stringify([r, r2]);
 });
 
+t("速報：ビンゴが増えたら bingo", function () {
+  var e = B.newsEvents({ 3: { name: "A", bingo: 0, reach: 2 } }, { 3: { name: "A", bingo: 1, reach: 1 } });
+  return e.length === 1 && e[0].type === "bingo" && e[0].no === 3 && e[0].count === 1 || JSON.stringify(e);
+});
+t("速報：ビンゴは同じでリーチが増えたら reach", function () {
+  var e = B.newsEvents({ 5: { bingo: 0, reach: 0 } }, { 5: { name: "B", bingo: 0, reach: 1 } });
+  return e.length === 1 && e[0].type === "reach" && e[0].name === "B" || JSON.stringify(e);
+});
+t("速報：初めて見た人も、ビンゴ・リーチがあれば出す／変わらなければ出さない", function () {
+  var e1 = B.newsEvents({}, { 7: { bingo: 0, reach: 1 }, 8: { bingo: 0, reach: 0 } });
+  var e2 = B.newsEvents({ 7: { bingo: 1, reach: 1 } }, { 7: { bingo: 1, reach: 1 } });
+  var e3 = B.newsEvents({ 7: { bingo: 1, reach: 2 } }, { 7: { bingo: 1, reach: 1 } });
+  return e1.length === 1 && e1[0].no === 7 && e2.length === 0 && e3.length === 0 || JSON.stringify([e1, e2, e3]);
+});
+t("ミスの数：開いたミスのマスだけ数える", function () {
+  var cells = B.generateCards("MISS1", 16)[0], marks = {}, miss = 0;
+  cells.forEach(function (x, p) { if (x !== B.FREE) { marks[p] = { hole: 1 }; if (B.tierOf(x) === "miss") miss++; } });
+  return B.missCount(cells, marks) === miss && miss === 7 && B.missCount(cells, {}) === 0 || "数が違う " + B.missCount(cells, marks);
+});
+t("ミス大賞：いちばん多い人（同じ数なら全員）・0 なら無し", function () {
+  var a = B.missAward([{ no: 2, miss: 3 }, { no: 9, miss: 5 }, { no: 4, miss: 5 }, { no: 1, miss: 0 }]);
+  var b = B.missAward([{ no: 2, miss: 0 }]);
+  return a.max === 5 && a.winners.map(function (r) { return r.no; }).join(",") === "4,9" && b.winners.length === 0 || JSON.stringify([a, b]);
+});
+
 var ok = results.filter(function (r) { return r.ok; }).length;
 document.getElementById("out").innerHTML = "<p><b>" + ok + " / " + results.length + "</b></p>" + results.map(function (r) {
   return '<div class="' + (r.ok ? "ok" : "ng") + '">' + (r.ok ? "OK " : "NG ") + r.name + (r.msg ? "：" + r.msg : "") + "</div>";

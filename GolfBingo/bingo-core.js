@@ -235,6 +235,34 @@
     });
   }
 
+  // ---- 速報とミス大賞 ----
+  // 開いたマスのうち「ミス」の数
+  function missCount(cells, marks) {
+    var n = 0;
+    for (var p in (marks || {})) if (marks[p] && cells[p] && tierOf(cells[p]) === "miss") n++;
+    return n;
+  }
+  // 前と今の各自の記録（番号 → {name, bingo, reach}）を比べて、速報にする出来事を出す
+  //   ビンゴの本数が増えた → bingo（count は今の本数）／ビンゴは同じでリーチが増えた → reach
+  function newsEvents(prev, next) {
+    var out = [];
+    Object.keys(next || {}).forEach(function (no) {
+      var a = (prev && prev[no]) || { bingo: 0, reach: 0 }, b = next[no] || {};
+      var nb = b.bingo || 0, nr = b.reach || 0, pb = a.bingo || 0, pr = a.reach || 0;
+      if (nb > pb) out.push({ no: +no, name: b.name || "", type: "bingo", count: nb });
+      else if (nb === pb && nr > pr) out.push({ no: +no, name: b.name || "", type: "reach", count: nr });
+    });
+    out.sort(function (x, y) { return x.no - y.no; });
+    return out;
+  }
+  // ミス大賞：ミスをいちばん多く開けた人（同じ数なら全員）。1 つも無ければ空
+  function missAward(rows) {
+    var max = 0;
+    rows.forEach(function (r) { max = Math.max(max, r.miss || 0); });
+    if (!max) return { max: 0, winners: [] };
+    return { max: max, winners: rows.filter(function (r) { return (r.miss || 0) === max; }).sort(function (a, b) { return a.no - b.no; }) };
+  }
+
   // ---- 参加（ログイン）で空いている番号をランダムに引く ----
   function normName(s) {
     s = String(s || "");
@@ -272,6 +300,7 @@
     ITEMS: ITEMS, TIERS: TIERS, PER_CARD: PER_CARD, SIZE: SIZE, CENTER: CENTER, FREE: FREE, LINES: LINES,
     rng: rng, shuffle: shuffle, tierOf: tierOf, fairLayout: fairLayout, compare: compare,
     generateCards: generateCards, diversity: diversity, evaluate: evaluate, rank: rank,
-    newCode: newCode, normCode: normCode, playerHue: playerHue, pickSeat: pickSeat, normName: normName
+    newCode: newCode, normCode: normCode, playerHue: playerHue, pickSeat: pickSeat, normName: normName,
+    missCount: missCount, newsEvents: newsEvents, missAward: missAward
   };
 })(typeof window !== "undefined" ? window : this);
