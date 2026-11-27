@@ -23,12 +23,14 @@ function t(name, fn) {
   catch (e) { results.push({ name: name, ok: false, msg: e.message }); }
 }
 
-t("出来事の数がカードに足りる", function () {
-  return B.ITEMS.easy.length >= B.PER_CARD.easy && B.ITEMS.mid.length >= B.PER_CARD.mid && B.ITEMS.hard.length >= B.PER_CARD.hard
-    && (B.PER_CARD.easy + B.PER_CARD.mid + B.PER_CARD.hard === 24) || "数が合わない";
+t("出来事の数がカードに足りる（1 枚 24 個）", function () {
+  var sum = 0;
+  for (var i = 0; i < B.TIERS.length; i++) { var k = B.TIERS[i]; if (B.ITEMS[k].length < B.PER_CARD[k] * 3) return k + " が少ない"; sum += B.PER_CARD[k]; }
+  return sum === 24 || "合計 " + sum;
 });
+t("ミス（失敗）の出来事がある", function () { return B.ITEMS.miss.length >= 20 && B.ITEMS.miss.indexOf("OB") >= 0 || "ミスが無い"; });
 t("出来事に重複が無い", function () {
-  var all = B.ITEMS.easy.concat(B.ITEMS.mid, B.ITEMS.hard), s = {};
+  var all = [], s = {}; B.TIERS.forEach(function (k) { all = all.concat(B.ITEMS[k]); });
   for (var i = 0; i < all.length; i++) { if (s[all[i]]) return "重複 " + all[i]; s[all[i]] = 1; }
   return true;
 });
@@ -44,13 +46,13 @@ codes.forEach(function (code) {
   t(code + "：1 枚の中に同じ出来事が無い", function () {
     return cards.every(function (c) { var s = {}; return c.every(function (x) { if (s[x]) return false; s[x] = 1; return true; }); }) || "重複あり";
   });
-  t(code + "：やさしい 10・ふつう 9・むずかしい 5", function () {
+  t(code + "：やさしい 8・ミス 7・ふつう 6・むずかしい 3", function () {
     return cards.every(function (c) {
-      var n = { easy: 0, mid: 0, hard: 0, free: 0 }; c.forEach(function (x) { n[B.tierOf(x)]++; });
-      return n.easy === 10 && n.mid === 9 && n.hard === 5 && n.free === 1;
+      var n = { easy: 0, miss: 0, mid: 0, hard: 0, free: 0 }; c.forEach(function (x) { n[B.tierOf(x)]++; });
+      return n.easy === 8 && n.miss === 7 && n.mid === 6 && n.hard === 3 && n.free === 1;
     }) || "段の数が違う";
   });
-  t(code + "：どの列もやさしい 1 個以上・むずかしい 2 個まで", function () { return cards.every(B.fairLayout) || "偏りあり"; });
+  t(code + "：どの列もやさしい 1 個以上・むずかしい 1 個まで・ミス 3 個まで", function () { return cards.every(B.fairLayout) || "偏りあり"; });
   var d = B.diversity(cards);
   t(code + "：同じカードが無い", function () { return d.duplicates === 0 || d.duplicates + " 組"; });
   t(code + "：同じ位置に同じ出来事の組が無い", function () { return d.samePosPairs === 0 || d.samePosPairs + " 組"; });

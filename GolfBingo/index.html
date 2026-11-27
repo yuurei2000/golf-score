@@ -19,6 +19,7 @@
   --bg: #f3f6f1; --panel: #ffffff; --ink: #1d2a22; --sub: #5a6b60; --line: #d5ded6;
   --green: #2f7d4f; --green-ink: #ffffff; --gold: #e0a400; --mark: #2f7d4f; --mark-ink: #ffffff;
   --free: #fff4cc; --bingo: #e94f37; --shadow: 0 1px 3px rgba(0,0,0,.08);
+  --miss-bg: #fdecea; --miss-ink: #c0392b;
   --hue: 200;
 }
 @media (prefers-color-scheme: dark) {
@@ -26,12 +27,14 @@
     --bg: #121814; --panel: #1b241e; --ink: #e8efe9; --sub: #9db0a3; --line: #2f3d33;
     --green: #4fae74; --green-ink: #0d1a12; --mark: #4fae74; --mark-ink: #0d1a12;
     --free: #3b3417; --bingo: #ff7a62; --shadow: none;
+    --miss-bg: #3a2320; --miss-ink: #ff8f7a;
   }
 }
 :root[data-theme="dark"] {
   --bg: #121814; --panel: #1b241e; --ink: #e8efe9; --sub: #9db0a3; --line: #2f3d33;
   --green: #4fae74; --green-ink: #0d1a12; --mark: #4fae74; --mark-ink: #0d1a12;
   --free: #3b3417; --bingo: #ff7a62; --shadow: none;
+  --miss-bg: #3a2320; --miss-ink: #ff8f7a;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -86,6 +89,10 @@ input[type=text] {
 .cell.on { background: var(--mark); color: var(--mark-ink); border-color: var(--mark); }
 .cell.on .tier { color: var(--mark-ink); opacity: .8; }
 .cell .hole { position: absolute; bottom: 2px; left: 0; right: 0; font-size: 9px; opacity: .9; }
+.cell.miss { background: var(--miss-bg); }
+.cell.miss .tier { color: var(--miss-ink); letter-spacing: 0; font-weight: 800; }
+.cell.miss.on { background: var(--mark); }
+.cell.miss.on .tier { color: var(--mark-ink); }
 .cell.inbingo { box-shadow: 0 0 0 3px var(--bingo) inset; }
 .cell.flash { animation: pop .35s ease; }
 @keyframes pop { 50% { transform: scale(1.08); } }
@@ -110,6 +117,8 @@ body.printmode #printView { display: block; }
 .pcard .pc { aspect-ratio: 1/1; border-right: 1px solid #333; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 10px; line-height: 1.2; padding: 2px; font-weight: 700; position: relative; }
 .pcard .pc.free { background: #fff1b8; }
 .pcard .pc .tier { position: absolute; top: 1px; right: 2px; font-size: 7px; color: #b88600; }
+.pcard .pc.miss { background: #fdecea; }
+.pcard .pc.miss .tier { color: #c0392b; font-weight: 800; }
 .pcard .ph { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; font-weight: 800; }
 .pgrid4 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10mm; }
 .pcard { min-width: 0; }
@@ -151,7 +160,7 @@ body.printmode #printView { display: block; }
     </div>
     <div class="panel">
       <h2>遊び方</h2>
-      <p style="margin:0">ラウンド中、マスの出来事ができたらタップ → 何番ホールかを選びます。縦・横・斜めの 5 マスがそろえば<b>ビンゴ</b>。真ん中は最初から開いています。順位はビンゴの本数 → リーチの数 → 開いたマスの数です。</p>
+      <p style="margin:0">ラウンド中、マスの出来事ができたらタップ → 何番ホールかを選びます。赤い「ミス」のマス（OB・3パット・空振り など）は、やってしまったら開けられます。縦・横・斜めの 5 マスがそろえば<b>ビンゴ</b>。真ん中は最初から開いています。順位はビンゴの本数 → リーチの数 → 開いたマスの数です。</p>
     </div>
   </section>
 
@@ -203,7 +212,7 @@ body.printmode #printView { display: block; }
       <h2>16 枚の違い</h2>
       <div class="stats" id="stats"></div>
       <p class="sub" id="statsNote"></p>
-      <p class="sub">★の数はむずかしさ。どのカードも、やさしい 10・ふつう 9・むずかしい（★★）5 個で、どの列にもやさしいが 1 個以上・むずかしいは 2 個までです。</p>
+      <p class="sub">スコア 100 前後の人向け。「ミス」のマス（OB・3パット・空振り など）は、やってしまったら開けます。★の数はむずかしさ。どのカードも、やさしい 8・ミス 7・ふつう（★）6・むずかしい（★★）3 個で、どの列にもやさしいが 1 個以上・むずかしいは 1 個まで・ミスは 3 個までです。</p>
     </div>
   </section>
 
@@ -287,7 +296,7 @@ body.printmode #printView { display: block; }
   function cardUrl(code, no) { return baseUrl() + "#g=" + code + "&p=" + no; }
   function hueColor(no) { return "hsl(" + B.playerHue(no) + " 55% 40%)"; }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
-  function stars(text) { var t = B.tierOf(text); return t === "hard" ? "★★" : t === "mid" ? "★" : ""; }
+  function stars(text) { var t = B.tierOf(text); return t === "hard" ? "★★" : t === "mid" ? "★" : t === "miss" ? "ミス" : ""; }
   function copy(text, done) {
     var ok = function () { done && done(true); }, ng = function () { done && done(false); };
     try { navigator.clipboard.writeText(text).then(ok, ng); } catch (e) { ng(); }
@@ -454,9 +463,9 @@ body.printmode #printView { display: block; }
         html += '<div class="pcard"><div class="ph"><span>⛳ ゴルフビンゴ No.' + no + '</span><span>' +
           (nm ? esc(nm) : "名前＿＿＿＿＿＿") + '</span></div><div class="pgrid">';
         c.forEach(function (x) {
-          html += x === B.FREE ? '<div class="pc free">FREE</div>' : '<div class="pc"><span class="tier">' + stars(x) + '</span>' + esc(x) + '</div>';
+          html += x === B.FREE ? '<div class="pc free">FREE</div>' : '<div class="pc' + (B.tierOf(x) === "miss" ? " miss" : "") + '"><span class="tier">' + stars(x) + '</span>' + esc(x) + '</div>';
         });
-        html += '</div><div style="font-size:9px;margin-top:3px">コード ' + code + '　★＝むずかしさ　できたら○と番手を書く</div></div>';
+        html += '</div><div style="font-size:9px;margin-top:3px">コード ' + code + '　★＝むずかしさ　ミス＝やってしまったら開く　できたら○と番手を書く</div></div>';
       }
       html += "</div>";
     }
@@ -516,7 +525,7 @@ body.printmode #printView { display: block; }
     var g = document.getElementById("grid"); g.innerHTML = "";
     cur.cells.forEach(function (x, pos) {
       var d = document.createElement("div"), m = cur.data.marks[pos];
-      d.className = "cell" + (x === B.FREE ? " free" : "") + (m ? " on" : "") + (inBingo[pos] ? " inbingo" : "") + (pos === flashPos ? " flash" : "");
+      d.className = "cell" + (x === B.FREE ? " free" : "") + (B.tierOf(x) === "miss" ? " miss" : "") + (m ? " on" : "") + (inBingo[pos] ? " inbingo" : "") + (pos === flashPos ? " flash" : "");
       if (x === B.FREE) d.textContent = "FREE";
       else {
         d.innerHTML = '<span class="tier">' + stars(x) + "</span>" + esc(x) + (m && m.hole ? '<span class="hole">' + m.hole + "番</span>" : "");
