@@ -11,9 +11,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261127d"></script>
-<script src="bingo-core.js?v=20261127d"></script>
-<script src="bingo-sync.js?v=20261127d"></script>
+<script src="firebase-config.js?v=20261128a"></script>
+<script src="bingo-core.js?v=20261128a"></script>
+<script src="bingo-sync.js?v=20261128a"></script>
 <style>
 :root {
   --bg: #f3f6f1; --panel: #ffffff; --ink: #1d2a22; --sub: #5a6b60; --line: #d5ded6;
@@ -252,6 +252,10 @@ body.printmode #printView { display: block; }
       </div>
       <p class="sub" id="resultText"></p>
     </div>
+    <div class="panel award" id="clash" hidden>
+      <p style="margin:0 0 8px"><b id="clashText"></b></p>
+      <button class="primary" id="btnRedraw">空いている番号を引き直す</button>
+    </div>
   </section>
 
   <!-- 印刷用 -->
@@ -385,24 +389,32 @@ body.printmode #printView { display: block; }
       save("myName", name);
       btn.disabled = true; msg.textContent = "カードを引いています…";
       var key = forceForm ? deviceKey() + "-" + B.normName(name) : deviceKey();
-      var timer = setTimeout(function () { fallback("記録先から返事がありません。"); }, 8000), done = false;
+      var timer = setTimeout(function () { if (!done) msg.textContent = "混み合っています。そのまま待ってください（引き直しています）…"; }, 6000), done = false;
       function finish(no, note) {
         if (done) return; done = true; clearTimeout(timer);
-        save("seat_" + code, { no: no, name: name });
+        save("seat_" + code, { no: no, name: name, key: key });
         var card = load("card_" + code + "_" + no, { marks: {}, name: "" }); card.name = name; save("card_" + code + "_" + no, card);
         save("note_" + code, note || "");
         btn.disabled = false;
         location.hash = "g=" + code + "&p=" + no;
       }
-      function fallback(why) {
-        if (done) return;
-        var no = 1 + Math.floor(Math.random() * N);
-        finish(no, why + "この端末だけで引いたので、ほかの人と番号が重なることがあります。");
+      function fail() {
+        if (done) return; done = true; clearTimeout(timer); btn.disabled = false;
+        msg.textContent = "番号を引けませんでした（つながりにくいようです）。少し待って、もう一度「参加する」を押してください。";
       }
-      S.join(code, name, key).then(function (r) {
-        if (r.full) { done = true; clearTimeout(timer); btn.disabled = false; msg.textContent = "16 名で満員です。幹事に番号を空けてもらってください。"; return; }
-        finish(r.no, r.reused ? "前に参加した No." + r.no + " を開きました。" : "");
-      }).catch(function (e) { console.error(e); fallback("参加の記録先につながりませんでした。"); });
+      // 記録先がまったく使えない（読み込めなかった）ときだけ、この端末で引く
+      if (!S.init()) {
+        finish(1 + Math.floor(Math.random() * N), "参加の記録先が使えないので、この端末だけで引きました。ほかの人と番号が重なることがあります。");
+        return;
+      }
+      // 席の記録は無いがカードが使われている番号は引かない
+      Promise.race([S.listCards(code), new Promise(function (ok) { setTimeout(function () { ok({}); }, 5000); })])
+        .catch(function () { return {}; })
+        .then(function (cards) { return S.join(code, name, key, B.usedByOthers({}, cards, name, N)); })
+        .then(function (r) {
+          if (r.full) { done = true; clearTimeout(timer); btn.disabled = false; msg.textContent = "16 名で満員です。幹事に番号を空けてもらってください。"; return; }
+          finish(r.no, r.reused ? "前に参加した No." + r.no + " を開きました。" : "");
+        }).catch(function (e) { console.error(e); fail(); });
     };
   }
 
@@ -450,19 +462,22 @@ body.printmode #printView { display: block; }
     var seats = {}, remote = {}, err = null;
     function drawRanking() {
       var rows = [];
-      Object.keys(seats).forEach(function (k) {
+      for (var k = 1; k <= N; k++) {
         var c = remote[k] || {}, s = seats[k];
-        rows.push({ no: +k, name: s.name, bingo: c.bingo || 0, reach: c.reach || 0, marks: c.count || 0, miss: B.missCount(cards[k - 1], c.marks) });
-      });
+        if (!s && !c.name) continue;
+        var warn = !s ? "席の記録なし" : c.name && B.normName(c.name) !== B.normName(s.name) ? "カードの名前は " + c.name : "";
+        rows.push({ no: k, name: s ? s.name : c.name, seat: !!s, warn: warn, bingo: c.bingo || 0, reach: c.reach || 0, marks: c.count || 0, miss: B.missCount(cards[k - 1], c.marks) });
+      }
       var ranked = B.rank(rows), html = "", place = 0, prev = null;
       ranked.forEach(function (r, i) {
         if (!prev || prev.bingo !== r.bingo || prev.reach !== r.reach || prev.marks !== r.marks) place = i + 1;
         prev = r;
         html += '<div class="player rankrow"><div class="num" style="background:' + hueColor(r.no) + '">' + r.no + '</div>' +
-          '<div><b>' + place + '位　' + esc(r.name) + '</b><br><span class="sub">ビンゴ ' + r.bingo + '・リーチ ' + r.reach + '・' + r.marks + ' マス・ミス ' + r.miss + '</span></div>' +
-          '<a class="btn" href="#g=' + code + '&p=' + r.no + '">カード</a><button data-no="' + r.no + '">外す</button></div>';
+          '<div><b>' + place + '位　' + esc(r.name) + '</b><br><span class="sub">ビンゴ ' + r.bingo + '・リーチ ' + r.reach + '・' + r.marks + ' マス・ミス ' + r.miss + '</span>' +
+          (r.warn ? '<br><span class="sub" style="color:var(--miss-ink)">⚠ ' + esc(r.warn) + '</span>' : '') + '</div>' +
+          '<a class="btn" href="#g=' + code + '&p=' + r.no + '">カード</a>' + (r.seat ? '<button data-no="' + r.no + '">外す</button>' : '<span></span>') + '</div>';
       });
-      var free = []; for (var i = 1; i <= N; i++) if (!seats[i]) free.push(i);
+      var free = []; for (var i = 1; i <= N; i++) if (!seats[i] && !(remote[i] && remote[i].name)) free.push(i);
       if (free.length) html += '<p class="sub">空き：' + free.map(function (n) { return "No." + n; }).join("・") + "</p>";
       var aw = B.missAward(rows);
       var awardHtml = rows.length ? '<div class="award">😅 <b>ミス大賞</b>　' + (aw.winners.length
@@ -549,11 +564,14 @@ body.printmode #printView { display: block; }
     setSync("");
     stopWatch();
     unwatch.push(watchNews(code, no));
-    // 別の端末で付けた印があれば、新しい方を使う
+    document.getElementById("clash").hidden = true;
+    checkSeat(code, no, seat);
+    // 別の端末で付けた印があれば、新しい方を使う（ほかの人の名前の記録は使わない）
     var mine = cur;
     S.loadCard(code, no).then(function (r) {
       if (cur !== mine) return;
-      if (r && (r.updatedAt || 0) > (cur.data.updatedAt || 0)) {
+      var sameName = r && (!r.name || !cur.data.name || B.normName(r.name) === B.normName(cur.data.name));
+      if (r && sameName && (r.updatedAt || 0) > (cur.data.updatedAt || 0)) {
         cur.data = { marks: r.marks || {}, name: r.name || cur.data.name, updatedAt: r.updatedAt };
         save(cur.key, cur.data); nm.value = cur.data.name || ""; drawCard(-1);
       }
@@ -561,6 +579,22 @@ body.printmode #printView { display: block; }
     }).catch(function () { setSync("記録：この端末だけ"); });
   }
   function setSync(t) { document.getElementById("syncState").textContent = t; }
+  // 自分で引いた番号のカードなら、その番号がほかの人の席になっていないかを確かめる
+  //   記録が無ければ自分の席として記録し、ほかの人の席なら引き直しを出す
+  function checkSeat(code, no, seat) {
+    if (!seat || seat.no !== no || !S.init()) return;
+    var mine = cur, name = cur.data.name || seat.name || "";
+    S.claim(code, no, name, seat.key || deviceKey(), deviceKey()).then(function (r) {
+      if (cur !== mine || r.state !== "other") return;
+      document.getElementById("clashText").textContent = "No." + no + " は " + (r.seat.name || "ほかの人") + "さんの番号と重なっています。" + (name ? name + "さんは、" : "") + "空いている番号を引き直してください。";
+      document.getElementById("clash").hidden = false;
+      document.getElementById("btnRedraw").onclick = function () {
+        try { localStorage.removeItem("gb_seat_" + code); } catch (e) {}
+        if (name) save("myName", name);
+        location.hash = "g=" + code + "&join";
+      };
+    }).catch(function (e) { console.error(e); });
+  }
 
   var pushTimer = null;
   function persist() {

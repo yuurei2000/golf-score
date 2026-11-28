@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ゴルフビンゴ 試験</title>
-<script src="bingo-core.js?v=20261127d"></script>
+<script src="bingo-core.js?v=20261128a"></script>
 <style>
 :root { --bg: #fff; --ink: #222; --ok: #1d7a3e; --ng: #c0392b; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #151a17; --ink: #e5ece7; --ok: #5fd08a; --ng: #ff8070; } }
@@ -145,6 +145,27 @@ t("ミス大賞：いちばん多い人（同じ数なら全員）・0 なら無
   var a = B.missAward([{ no: 2, miss: 3 }, { no: 9, miss: 5 }, { no: 4, miss: 5 }, { no: 1, miss: 0 }]);
   var b = B.missAward([{ no: 2, miss: 0 }]);
   return a.max === 5 && a.winners.map(function (r) { return r.no; }).join(",") === "4,9" && b.winners.length === 0 || JSON.stringify([a, b]);
+});
+
+t("参加：カードが使われている番号（blocked）は引かない", function () {
+  for (var s = 0; s < 50; s++) {
+    var r = B.pickSeat({ 2: { name: "x", key: "x" } }, "新", "kn", B.rng("b" + s), 16, [1, 13]);
+    if (r.no === 1 || r.no === 13 || r.no === 2) return "引いた " + r.no;
+  }
+  var full = B.pickSeat({}, "新", "kn", Math.random, 2, [1, 2]);
+  return full.full === true || JSON.stringify(full);
+});
+t("席の持ち主：同じ端末の鍵・別の名前で入った鍵・同じ名前は mine、ほかは other、無ければ free", function () {
+  var a = B.seatOwner({ name: "やすかわ", key: "dev1" }, "dev1", "ゆういち");
+  var b = B.seatOwner({ name: "やすかわ", key: "dev1-ゆういち" }, "dev1", "ゆういち");
+  var c = B.seatOwner({ name: "やすかわ", key: "dev2" }, "dev1", "ゆういち");
+  var d = B.seatOwner({ name: "ゆういち", key: "dev2" }, "dev1", "ゆういち");
+  var e = B.seatOwner(undefined, "dev1", "ゆういち");
+  return a === "mine" && b === "mine" && c === "other" && d === "mine" && e === "free" || [a, b, c, d, e].join(",");
+});
+t("席の記録の無いカード：ほかの人の名前なら blocked・自分の名前や名前なしは入れない", function () {
+  var u = B.usedByOthers({ 13: { name: "やすかわ" } }, { 1: { name: "花田" }, 13: { name: "ゆういち" }, 4: { name: "ゆういち" }, 5: { name: "" } }, "ゆういち", 16);
+  return u.join(",") === "1" || u.join(",");
 });
 
 var ok = results.filter(function (r) { return r.ok; }).length;

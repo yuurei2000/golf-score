@@ -270,15 +270,37 @@
     return s.replace(/\s+/g, "").toLowerCase();
   }
   // seats：{ "番号": {name, key} }。同じ端末（key）か同じ名前なら前の番号を返す。空きが無ければ full
-  function pickSeat(seats, name, key, rand, n) {
+  // blocked：席の記録は無いが、ほかの人がカードを使っている番号（新しく引かない）
+  function pickSeat(seats, name, key, rand, n, blocked) {
     n = n || 16; rand = rand || Math.random; seats = seats || {};
+    var ng = {}; (blocked || []).forEach(function (b) { ng[+b] = true; });
     var no, nm = normName(name);
     for (no in seats) if (seats[no] && key && seats[no].key === key) return { no: +no, reused: true };
     for (no in seats) if (seats[no] && nm && normName(seats[no].name) === nm) return { no: +no, reused: true };
     var free = [];
-    for (var i = 1; i <= n; i++) if (!seats[i] && !seats[String(i)]) free.push(i);
+    for (var i = 1; i <= n; i++) if (!seats[i] && !seats[String(i)] && !ng[i]) free.push(i);
     if (!free.length) return { full: true };
     return { no: free[Math.floor(rand() * free.length)], reused: false };
+  }
+
+  // 席がこの端末（この人）の物か：mine／free（だれの席でもない）／other（ほかの人の席）
+  //   devKey はこの端末の鍵。別の名前で参加した席は「鍵-名前」なので頭が同じなら自分の端末
+  function seatOwner(seat, devKey, name) {
+    if (!seat) return "free";
+    var k = seat.key || "";
+    if (devKey && (k === devKey || k.indexOf(devKey + "-") === 0)) return "mine";
+    if (name && normName(seat.name) === normName(name)) return "mine";
+    return "other";
+  }
+  // 席の記録は無いが、ほかの人の名前でカードが使われている番号
+  function usedByOthers(seats, cards, name, n) {
+    n = n || 16; var nm = normName(name), out = [];
+    for (var i = 1; i <= n; i++) {
+      var c = cards && cards[i];
+      if (seats && seats[i]) continue;
+      if (c && c.name && normName(c.name) !== nm) out.push(i);
+    }
+    return out;
   }
 
   // ゲームコード：読み違えやすい字（0/O・1/I など）を除いた 5 文字
@@ -301,6 +323,7 @@
     rng: rng, shuffle: shuffle, tierOf: tierOf, fairLayout: fairLayout, compare: compare,
     generateCards: generateCards, diversity: diversity, evaluate: evaluate, rank: rank,
     newCode: newCode, normCode: normCode, playerHue: playerHue, pickSeat: pickSeat, normName: normName,
-    missCount: missCount, newsEvents: newsEvents, missAward: missAward
+    missCount: missCount, newsEvents: newsEvents, missAward: missAward,
+    seatOwner: seatOwner, usedByOthers: usedByOthers
   };
 })(typeof window !== "undefined" ? window : this);

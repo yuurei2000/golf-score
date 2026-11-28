@@ -19,15 +19,27 @@ window.BingoSync = (function () {
   function gameRef(code) { return db.collection("bingo").doc(code); }
 
   // 参加：空いている番号をトランザクションでランダムに引く（2 人が同時に押しても重ならない）
-  function join(code, name, key) {
+  // 混み合ってトランザクションが通らないときは、少し待って引き直す（端末だけで引くことはしない）
+  function retry(fn, tries) {
+    var i = 0;
+    function go() {
+      return fn().catch(function (e) {
+        if (++i >= tries) throw e;
+        var wait = 400 * Math.pow(2, i - 1) + Math.random() * 600;
+        return new Promise(function (ok) { setTimeout(ok, wait); }).then(go);
+      });
+    }
+    return go();
+  }
+  function join(code, name, key, blocked) {
     if (!init()) return Promise.reject(new Error("offline"));
     var ref = gameRef(code);
-    return db.runTransaction(function (tx) {
+    return retry(function () { return db.runTransaction(function (tx) {
       return tx.get(ref).then(function (snap) {
         var seats = (snap.exists && snap.data().seats) || {};
         var r = window.BingoCore.pickSeat(seats, name, key, function () {
           var b = new Uint32Array(1); crypto.getRandomValues(b); return b[0] / 4294967296;
-        });
+        }, 16, blocked);
         if (r.full) return r;
         if (r.reused) { r.name = seats[r.no].name; return r; }
         var next = {}; Object.keys(seats).forEach(function (k) { next[k] = seats[k]; });
@@ -36,7 +48,30 @@ window.BingoSync = (function () {
         r.name = name;
         return r;
       });
-    });
+    }); }, 6);
+  }
+
+  // カードを開いた人の席を確かめる。記録が無ければこの人の席として記録する
+  //   戻り値 {state: "mine"|"other", seat}
+  function claim(code, no, name, key, devKey) {
+    if (!init()) return Promise.reject(new Error("offline"));
+    var ref = gameRef(code);
+    return retry(function () { return db.runTransaction(function (tx) {
+      return tx.get(ref).then(function (snap) {
+        var seats = (snap.exists && snap.data().seats) || {}, s = seats[String(no)];
+        var own = window.BingoCore.seatOwner(s, devKey, name);
+        if (own === "mine") return { state: "mine", seat: s };
+        if (own === "other") return { state: "other", seat: s };
+        var next = {}; Object.keys(seats).forEach(function (k) { next[k] = seats[k]; });
+        next[String(no)] = { name: name, key: key, at: Date.now() };
+        tx.set(ref, { seats: next, updatedAt: Date.now() });
+        return { state: "mine", seat: next[String(no)], claimed: true };
+      });
+    }); }, 4);
+  }
+  function listCards(code) {
+    if (!init()) return Promise.resolve({});
+    return gameRef(code).collection("cards").get().then(function (qs) { var o = {}; qs.forEach(function (d) { o[d.id] = d.data(); }); return o; });
   }
 
   // 幹事：番号を空ける（間違えて参加した人など）
@@ -71,5 +106,5 @@ window.BingoSync = (function () {
     return gameRef(code).collection("cards").doc(String(no)).set(data).then(function () { return true; });
   }
 
-  return { init: init, join: join, release: release, watchSeats: watchSeats, watchCards: watchCards, loadCard: loadCard, saveCard: saveCard };
+  return { init: init, join: join, claim: claim, listCards: listCards, release: release, watchSeats: watchSeats, watchCards: watchCards, loadCard: loadCard, saveCard: saveCard };
 })();
