@@ -70,6 +70,21 @@ window.BingoSync = (function () {
       });
     }); }, 4);
   }
+  // 幹事：番号を変える・当てる。fromNo があればその席を空けて、鍵ごと新しい番号へ移す
+  function assign(code, to, name, fromNo) {
+    if (!init()) return Promise.reject(new Error("offline"));
+    var ref = gameRef(code), nn = window.BingoCore.normName;
+    return db.runTransaction(function (tx) {
+      return tx.get(ref).then(function (snap) {
+        var seats = (snap.exists && snap.data().seats) || {}, cur = seats[String(to)];
+        if (cur && nn(cur.name) !== nn(name)) throw new Error("No." + to + " は " + cur.name + "さんが使っています");
+        var old = fromNo ? seats[String(fromNo)] : null, next = {};
+        Object.keys(seats).forEach(function (k) { if (!fromNo || k !== String(fromNo)) next[k] = seats[k]; });
+        next[String(to)] = { name: name, key: (old && old.key) || (cur && cur.key) || "kanji", at: Date.now() };
+        tx.set(ref, { seats: next, updatedAt: Date.now() });
+      });
+    });
+  }
   function listCards(code) {
     if (!init()) return Promise.resolve({});
     return gameRef(code).collection("cards").get().then(function (qs) { var o = {}; qs.forEach(function (d) { o[d.id] = d.data(); }); return o; });
@@ -107,5 +122,5 @@ window.BingoSync = (function () {
     return gameRef(code).collection("cards").doc(String(no)).set(data).then(function () { return true; });
   }
 
-  return { init: init, join: join, claim: claim, listCards: listCards, release: release, watchSeats: watchSeats, watchCards: watchCards, loadCard: loadCard, saveCard: saveCard };
+  return { init: init, join: join, claim: claim, assign: assign, listCards: listCards, release: release, watchSeats: watchSeats, watchCards: watchCards, loadCard: loadCard, saveCard: saveCard };
 })();

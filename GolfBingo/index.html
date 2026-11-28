@@ -11,9 +11,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261128b"></script>
-<script src="bingo-core.js?v=20261128b"></script>
-<script src="bingo-sync.js?v=20261128b"></script>
+<script src="firebase-config.js?v=20261128c"></script>
+<script src="bingo-core.js?v=20261128c"></script>
+<script src="bingo-sync.js?v=20261128c"></script>
 <style>
 :root {
   --bg: #f3f6f1; --panel: #ffffff; --ink: #1d2a22; --sub: #5a6b60; --line: #d5ded6;
@@ -115,6 +115,8 @@ input[type=text] {
 .toast.miss { border-color: var(--miss-ink); }
 .toast.out { opacity: 0; transition: opacity .4s; }
 @keyframes toastIn { from { transform: translateY(-12px); opacity: 0; } }
+.seatbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.seatbtns button { font-size: 12px; padding: 4px 8px; }
 /* ミス大賞 */
 .award { border: 2px dashed var(--miss-ink); background: var(--miss-bg); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
 .award b { color: var(--miss-ink); }
@@ -466,7 +468,8 @@ body.printmode #printView { display: block; }
         var c = remote[k] || {}, s = seats[k];
         if (!s && !c.name) continue;
         var warn = !s ? "席の記録なし" : c.name && B.normName(c.name) !== B.normName(s.name) ? "カードの名前は " + c.name : "";
-        rows.push({ no: k, name: s ? s.name : c.name, seat: !!s, warn: warn, bingo: c.bingo || 0, reach: c.reach || 0, marks: c.count || 0, miss: B.missCount(cards[k - 1], c.marks) });
+        var cardName = c.name && (!s || B.normName(c.name) !== B.normName(s.name)) ? c.name : "";
+        rows.push({ no: k, name: s ? s.name : c.name, seat: !!s, warn: warn, cardName: cardName, bingo: c.bingo || 0, reach: c.reach || 0, marks: c.count || 0, miss: B.missCount(cards[k - 1], c.marks) });
       }
       var ranked = B.rank(rows), html = "", place = 0, prev = null;
       ranked.forEach(function (r, i) {
@@ -474,7 +477,9 @@ body.printmode #printView { display: block; }
         prev = r;
         html += '<div class="player rankrow"><div class="num" style="background:' + hueColor(r.no) + '">' + r.no + '</div>' +
           '<div><b>' + place + '位　' + esc(r.name) + '</b><br><span class="sub">ビンゴ ' + r.bingo + '・リーチ ' + r.reach + '・' + r.marks + ' マス・ミス ' + r.miss + '</span>' +
-          (r.warn ? '<br><span class="sub" style="color:var(--miss-ink)">⚠ ' + esc(r.warn) + '</span>' : '') + '</div>' +
+          (r.warn ? '<br><span class="sub" style="color:var(--miss-ink)">⚠ ' + esc(r.warn) + '</span>' : '') +
+          '<div class="seatbtns">' + (r.seat ? '<button data-move="' + r.no + '">番号を変える</button>' : '') +
+          (r.cardName ? '<button data-give="' + r.no + '">' + esc(r.cardName) + 'さんに番号を当てる</button>' : '') + '</div></div>' +
           '<a class="btn" href="#g=' + code + '&p=' + r.no + '">カード</a>' + (r.seat ? '<button data-no="' + r.no + '">外す</button>' : '<span></span>') + '</div>';
       });
       var free = []; for (var i = 1; i <= N; i++) if (!seats[i] && !(remote[i] && remote[i].name)) free.push(i);
@@ -486,6 +491,34 @@ body.printmode #printView { display: block; }
       document.getElementById("ranking").innerHTML = html ? awardHtml + html : '<p class="sub">まだ誰も参加していません。</p>';
       document.getElementById("seatCount").textContent = "（" + rows.length + " / " + N + " 名）";
       document.getElementById("syncNote").textContent = err ? "参加の記録先につながりません。Firebase のルールに「bingo」を足したかを確かめてください。" : "参加すると自動でここに出ます。順位は各自のカードの印から自動で並びます。";
+      // 番号を変える（席の人を別の番号へ）・当てる（席の無いカードの人に番号を）
+      function askNo(label, extra) {
+        var opts = free.slice(); if (extra && opts.indexOf(extra) < 0) opts.unshift(extra);
+        if (!opts.length) { alert("空いている番号がありません。"); return 0; }
+        var v = prompt(label + "\n何番にしますか？（空き：" + opts.join("・") + "）", String(opts[0]));
+        if (v === null) return 0;
+        var to = parseInt(String(v).replace(/[^0-9０-９]/g, "").replace(/[０-９]/g, function (d) { return "０１２３４５６７８９".indexOf(d); }), 10);
+        if (opts.indexOf(to) < 0) { alert("No." + v + " は選べません。空き：" + opts.join("・")); return 0; }
+        return to;
+      }
+      Array.prototype.forEach.call(document.querySelectorAll("#ranking button[data-move]"), function (b) {
+        b.onclick = function () {
+          var no = +b.getAttribute("data-move"), s = seats[no]; if (!s) return;
+          var to = askNo(s.name + "さん（今 No." + no + "）の番号を変えます。カードの中身が変わり、今までの印は新しいカードへ移りません。");
+          if (!to) return;
+          S.assign(code, to, s.name, no).then(function () { toast("✅ " + s.name + "さんを No." + to + " にしました", "reach"); })
+            .catch(function (e) { alert("変えられませんでした：" + e.message); });
+        };
+      });
+      Array.prototype.forEach.call(document.querySelectorAll("#ranking button[data-give]"), function (b) {
+        b.onclick = function () {
+          var no = +b.getAttribute("data-give"), name = (remote[no] && remote[no].name) || ""; if (!name) return;
+          var to = askNo(name + "さん（No." + no + " のカードを使っているが、番号の記録が無い）に番号を当てます。", seats[no] ? 0 : no);
+          if (!to) return;
+          S.assign(code, to, name, 0).then(function () { toast("✅ " + name + "さんを No." + to + " にしました", "reach"); })
+            .catch(function (e) { alert("当てられませんでした：" + e.message); });
+        };
+      });
       Array.prototype.forEach.call(document.querySelectorAll("#ranking button[data-no]"), function (b) {
         b.onclick = function () {
           var no = b.getAttribute("data-no");
@@ -581,19 +614,43 @@ body.printmode #printView { display: block; }
   function setSync(t) { document.getElementById("syncState").textContent = t; }
   // 自分で引いた番号のカードなら、その番号がほかの人の席になっていないかを確かめる
   //   記録が無ければ自分の席として記録し、ほかの人の席なら引き直しを出す
+  //   幹事が番号を変えたら（同じ名前か同じ鍵の席がほかの番号にできたら）そのカードへ移る
   function checkSeat(code, no, seat) {
     if (!seat || seat.no !== no || !S.init()) return;
-    var mine = cur, name = cur.data.name || seat.name || "";
-    S.claim(code, no, name, seat.key || deviceKey(), deviceKey()).then(function (r) {
-      if (cur !== mine || r.state !== "other") return;
-      document.getElementById("clashText").textContent = "No." + no + " は " + (r.seat.name || "ほかの人") + "さんの番号と重なっています。" + (name ? name + "さんは、" : "") + "空いている番号を引き直してください。";
+    var mine = cur, dk = deviceKey(), claimed = false;
+    function showClash(other, name) {
+      document.getElementById("clashText").textContent = "No." + no + " は " + ((other && other.name) || "ほかの人") + "さんの番号と重なっています。" + (name ? name + "さんは、" : "") + "空いている番号を引き直すか、幹事に番号を変えてもらってください。";
       document.getElementById("clash").hidden = false;
       document.getElementById("btnRedraw").onclick = function () {
         try { localStorage.removeItem("gb_seat_" + code); } catch (e) {}
         if (name) save("myName", name);
         location.hash = "g=" + code + "&join";
       };
-    }).catch(function (e) { console.error(e); });
+    }
+    unwatch.push(S.watchSeats(code, function (seats, e) {
+      if (e || !seats || cur !== mine) return;
+      var name = cur.data.name || seat.name || "", nm = B.normName(name);
+      if (B.seatOwner(seats[no], dk, name) === "mine") { document.getElementById("clash").hidden = true; return; }
+      for (var k = 1; k <= N; k++) {
+        var s = seats[k];
+        if (k === no || !s) continue;
+        if ((seat.key && s.key === seat.key) || (nm && B.normName(s.name) === nm)) {
+          save("seat_" + code, { no: k, name: name, key: s.key });
+          var card = load("card_" + code + "_" + k, { marks: {}, name: "" });
+          if (!card.name) { card.name = name; save("card_" + code + "_" + k, card); }
+          save("note_" + code, "幹事が番号を No." + no + " から No." + k + " に変えました。");
+          location.hash = "g=" + code + "&p=" + k;
+          return;
+        }
+      }
+      if (!seats[no]) {
+        if (claimed) return; claimed = true;
+        S.claim(code, no, name, seat.key || dk, dk).then(function (r) { if (cur === mine && r.state === "other") showClash(r.seat, name); })
+          .catch(function (e) { console.error(e); });
+        return;
+      }
+      showClash(seats[no], name);
+    }));
   }
 
   var pushTimer = null;
