@@ -11,9 +11,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261128c"></script>
-<script src="bingo-core.js?v=20261128c"></script>
-<script src="bingo-sync.js?v=20261128c"></script>
+<script src="firebase-config.js?v=20261128d"></script>
+<script src="bingo-core.js?v=20261128d"></script>
+<script src="bingo-sync.js?v=20261128d"></script>
 <style>
 :root {
   --bg: #f3f6f1; --panel: #ffffff; --ink: #1d2a22; --sub: #5a6b60; --line: #d5ded6;
@@ -115,6 +115,8 @@ input[type=text] {
 .toast.miss { border-color: var(--miss-ink); }
 .toast.out { opacity: 0; transition: opacity .4s; }
 @keyframes toastIn { from { transform: translateY(-12px); opacity: 0; } }
+.rankrow.me { outline: 3px solid var(--gold); outline-offset: 2px; border-radius: 10px; }
+.rankview .rankrow { grid-template-columns: 44px 1fr; }
 .seatbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .seatbtns button { font-size: 12px; padding: 4px 8px; }
 /* ミス大賞 */
@@ -229,6 +231,19 @@ body.printmode #printView { display: block; }
     </div>
   </section>
 
+  <!-- みんなの順位（参加者が見る） -->
+  <section id="rankView" hidden>
+    <div class="row noprint" style="justify-content:space-between">
+      <a class="btn" id="rankBack" href="#">← 自分のカード</a>
+      <span class="sub" id="rankCode"></span>
+    </div>
+    <div class="panel">
+      <h2>みんなの順位 <span class="sub" id="rankCount"></span></h2>
+      <p class="sub" id="rankNote" style="margin-top:0">各自のカードの印から自動で並びます（ビンゴ → リーチ → 開いたマスの多い順）。</p>
+      <div id="rankList"></div>
+    </div>
+  </section>
+
   <!-- 各自のカード -->
   <section id="cardView" hidden>
     <div class="row noprint" style="justify-content:space-between">
@@ -249,6 +264,7 @@ body.printmode #printView { display: block; }
         <div class="stat"><span class="sub">開いたマス</span><b id="sMarks">0</b></div>
       </div>
       <div class="row">
+        <a class="btn primary" id="btnRank" href="#">みんなの順位</a>
         <button id="btnResult" class="primary">結果を写す</button>
         <button id="btnReset">印をすべて消す</button>
       </div>
@@ -321,7 +337,7 @@ body.printmode #printView { display: block; }
     try { navigator.clipboard.writeText(text).then(ok, ng); } catch (e) { ng(); }
   }
   function show(id) {
-    ["joinView", "hostView", "cardView"].forEach(function (v) { document.getElementById(v).hidden = v !== id; });
+    ["joinView", "hostView", "cardView", "rankView"].forEach(function (v) { document.getElementById(v).hidden = v !== id; });
   }
   function drawQr(el, url, size) {
     el.innerHTML = "";
@@ -364,6 +380,32 @@ body.printmode #printView { display: block; }
       base = next; awardKey = key;
       onData && onData(c);
     });
+  }
+  // 順位の行：席の人と、席の記録が無いがカードを使っている人
+  function rankRows(seats, remote, cards) {
+    var rows = [];
+    for (var k = 1; k <= N; k++) {
+      var c = remote[k] || {}, s = seats[k];
+      if (!s && !c.name) continue;
+      var warn = !s ? "席の記録なし" : c.name && B.normName(c.name) !== B.normName(s.name) ? "カードの名前は " + c.name : "";
+      var cardName = c.name && (!s || B.normName(c.name) !== B.normName(s.name)) ? c.name : "";
+      rows.push({ no: k, name: s ? s.name : c.name, seat: !!s, warn: warn, cardName: cardName, bingo: c.bingo || 0, reach: c.reach || 0, marks: c.count || 0, miss: B.missCount(cards[k - 1], c.marks) });
+    }
+    return rows;
+  }
+  // 順位（ビンゴ・リーチ・マスが同じなら同じ順位）をつけて並べる
+  function placed(rows) {
+    var place = 0, prev = null;
+    return B.rank(rows).map(function (r, i) {
+      if (!prev || prev.bingo !== r.bingo || prev.reach !== r.reach || prev.marks !== r.marks) place = i + 1;
+      prev = r; r.place = place; return r;
+    });
+  }
+  function awardBox(rows) {
+    var aw = B.missAward(rows);
+    return rows.length ? '<div class="award">😅 <b>ミス大賞</b>　' + (aw.winners.length
+      ? aw.winners.map(function (r) { return esc(r.name) + "さん（No." + r.no + "）"; }).join("・") + "　ミス " + aw.max + " マス"
+      : "まだいません（赤い「ミス」のマスをいちばん多く開けた人）") + "</div>" : "";
   }
   var unwatch = [];
   function stopWatch() { unwatch.forEach(function (f) { try { f(); } catch (e) {} }); unwatch = []; }
@@ -463,20 +505,10 @@ body.printmode #printView { display: block; }
     // 参加状況と順位（Firestore から）
     var seats = {}, remote = {}, err = null;
     function drawRanking() {
-      var rows = [];
-      for (var k = 1; k <= N; k++) {
-        var c = remote[k] || {}, s = seats[k];
-        if (!s && !c.name) continue;
-        var warn = !s ? "席の記録なし" : c.name && B.normName(c.name) !== B.normName(s.name) ? "カードの名前は " + c.name : "";
-        var cardName = c.name && (!s || B.normName(c.name) !== B.normName(s.name)) ? c.name : "";
-        rows.push({ no: k, name: s ? s.name : c.name, seat: !!s, warn: warn, cardName: cardName, bingo: c.bingo || 0, reach: c.reach || 0, marks: c.count || 0, miss: B.missCount(cards[k - 1], c.marks) });
-      }
-      var ranked = B.rank(rows), html = "", place = 0, prev = null;
-      ranked.forEach(function (r, i) {
-        if (!prev || prev.bingo !== r.bingo || prev.reach !== r.reach || prev.marks !== r.marks) place = i + 1;
-        prev = r;
+      var rows = rankRows(seats, remote, cards), html = "";
+      placed(rows).forEach(function (r) {
         html += '<div class="player rankrow"><div class="num" style="background:' + hueColor(r.no) + '">' + r.no + '</div>' +
-          '<div><b>' + place + '位　' + esc(r.name) + '</b><br><span class="sub">ビンゴ ' + r.bingo + '・リーチ ' + r.reach + '・' + r.marks + ' マス・ミス ' + r.miss + '</span>' +
+          '<div><b>' + r.place + '位　' + esc(r.name) + '</b><br><span class="sub">ビンゴ ' + r.bingo + '・リーチ ' + r.reach + '・' + r.marks + ' マス・ミス ' + r.miss + '</span>' +
           (r.warn ? '<br><span class="sub" style="color:var(--miss-ink)">⚠ ' + esc(r.warn) + '</span>' : '') +
           '<div class="seatbtns">' + (r.seat ? '<button data-move="' + r.no + '">番号を変える</button>' : '') +
           (r.cardName ? '<button data-give="' + r.no + '">' + esc(r.cardName) + 'さんに番号を当てる</button>' : '') + '</div></div>' +
@@ -484,11 +516,7 @@ body.printmode #printView { display: block; }
       });
       var free = []; for (var i = 1; i <= N; i++) if (!seats[i] && !(remote[i] && remote[i].name)) free.push(i);
       if (free.length) html += '<p class="sub">空き：' + free.map(function (n) { return "No." + n; }).join("・") + "</p>";
-      var aw = B.missAward(rows);
-      var awardHtml = rows.length ? '<div class="award">😅 <b>ミス大賞</b>　' + (aw.winners.length
-        ? aw.winners.map(function (r) { return esc(r.name) + "さん（No." + r.no + "）"; }).join("・") + "　ミス " + aw.max + " マス"
-        : "まだいません（赤い「ミス」のマスをいちばん多く開けた人）") + "</div>" : "";
-      document.getElementById("ranking").innerHTML = html ? awardHtml + html : '<p class="sub">まだ誰も参加していません。</p>';
+      document.getElementById("ranking").innerHTML = html ? awardBox(rows) + html : '<p class="sub">まだ誰も参加していません。</p>';
       document.getElementById("seatCount").textContent = "（" + rows.length + " / " + N + " 名）";
       document.getElementById("syncNote").textContent = err ? "参加の記録先につながりません。Firebase のルールに「bingo」を足したかを確かめてください。" : "参加すると自動でここに出ます。順位は各自のカードの印から自動で並びます。";
       // 番号を変える（席の人を別の番号へ）・当てる（席の無いカードの人に番号を）
@@ -574,6 +602,32 @@ body.printmode #printView { display: block; }
     document.getElementById("printView").innerHTML = html;
   }
 
+  // ---- みんなの順位（参加者が見る。変える・外すのボタンは無い） ----
+  function showRank(code) {
+    show("rankView");
+    document.getElementById("rankView").classList.add("rankview");
+    document.title = "ゴルフビンゴ 順位";
+    document.documentElement.style.removeProperty("--mark");
+    var seat = load("seat_" + code, null), myNo = seat && seat.no >= 1 && seat.no <= N ? seat.no : 0;
+    document.getElementById("rankBack").href = myNo ? "#g=" + code + "&p=" + myNo : "#g=" + code + "&join";
+    document.getElementById("rankBack").textContent = myNo ? "← 自分のカード（No." + myNo + "）" : "← 参加する";
+    document.getElementById("rankCode").textContent = "コード " + code;
+    var cards = B.generateCards(code, N), seats = {}, remote = {}, err = null;
+    function draw() {
+      var rows = rankRows(seats, remote, cards), html = "";
+      placed(rows).forEach(function (r) {
+        html += '<div class="player rankrow' + (r.no === myNo ? " me" : "") + '"><div class="num" style="background:' + hueColor(r.no) + '">' + r.no + '</div>' +
+          '<div><b>' + r.place + '位　' + esc(r.name) + (r.no === myNo ? "（自分）" : "") + '</b><br><span class="sub">ビンゴ ' + r.bingo + '・リーチ ' + r.reach + '・' + r.marks + ' マス・ミス ' + r.miss + '</span></div></div>';
+      });
+      document.getElementById("rankList").innerHTML = html ? awardBox(rows) + html : '<p class="sub">' + (err ? "記録先につながりません。電波のよい所で開き直してください。" : "まだ誰も参加していません。") + "</p>";
+      document.getElementById("rankCount").textContent = "（" + rows.length + " 名）";
+    }
+    draw();
+    stopWatch();
+    unwatch.push(S.watchSeats(code, function (s, e) { if (e) err = e; else seats = s || {}; draw(); }));
+    unwatch.push(watchNews(code, myNo, function (c, e) { if (e) err = e; else remote = c || {}; draw(); }));
+  }
+
   // ---- 各自のカード ----
   var cur = null;
   function showCard(code, no) {
@@ -586,6 +640,7 @@ body.printmode #printView { display: block; }
     var color = hueColor(no);
     document.documentElement.style.setProperty("--mark", color);
     var badge = document.getElementById("badge"); badge.textContent = "No." + no; badge.style.background = color;
+    document.getElementById("btnRank").href = "#g=" + code + "&rank";
     document.getElementById("cardCode").innerHTML = '<a href="#g=' + code + '&join">コード ' + code + "</a>";
     document.getElementById("letters").innerHTML = COLS.map(function (l) { return '<span style="background:' + color + '">' + l + "</span>"; }).join("");
     var nm = document.getElementById("myName"); nm.value = cur.data.name || "";
@@ -736,12 +791,14 @@ body.printmode #printView { display: block; }
   //   #g=コード&p=番号     各自のカード
   //   #g=コード&admin      幹事（URL なしで開いたときも幹事）
   //   #g=コード&print      印刷の見本
+  //   #g=コード&rank       みんなの順位（参加者用・見るだけ）
   function route() {
     var h = parseHash(), code = B.normCode(h.g), no = parseInt(h.p, 10);
     document.body.classList.remove("printmode");
     closeSheet();
     if (!code || h.admin !== undefined) { showHost(code); }
     else if (no >= 1 && no <= N) { stopWatch(); showCard(code, no); }
+    else if (h.rank !== undefined) { showRank(code); }
     else if (h.print !== undefined) { showHost(code); renderPrint(code, {}); document.body.classList.add("printmode"); }
     else {
       stopWatch();
