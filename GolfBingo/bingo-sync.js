@@ -37,9 +37,10 @@ window.BingoSync = (function () {
     return retry(function () { return db.runTransaction(function (tx) {
       return tx.get(ref).then(function (snap) {
         var seats = (snap.exists && snap.data().seats) || {};
-        var r = window.BingoCore.pickSeat(seats, name, key, function () {
-          var b = new Uint32Array(1); crypto.getRandomValues(b); return b[0] / 4294967296;
-        }, 16, blocked);
+        // まず 1〜16 から引き、埋まっていたら 17〜20 から引く（今までの 16 枚はそのまま）
+        var rnd = function () { var b = new Uint32Array(1); crypto.getRandomValues(b); return b[0] / 4294967296; };
+        var r = window.BingoCore.pickSeat(seats, name, key, rnd, 16, blocked);
+        if (r.full) r = window.BingoCore.pickSeat(seats, name, key, rnd, 20, blocked);
         if (r.full) return r;
         if (r.reused) { r.name = seats[r.no].name; return r; }
         var next = {}; Object.keys(seats).forEach(function (k) { next[k] = seats[k]; });

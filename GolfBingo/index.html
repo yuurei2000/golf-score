@@ -4,16 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ゴルフビンゴ</title>
-<meta name="description" content="参加すると 16 枚のうち空いているカードがランダムに当たる、ラウンド中のゴルフビンゴ">
+<meta name="description" content="参加すると 20 枚のうち空いているカードがランダムに当たる、ラウンド中のゴルフビンゴ">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261128a"></script>
-<script src="bingo-core.js?v=20261128a"></script>
-<script src="bingo-sync.js?v=20261128a"></script>
+<script src="firebase-config.js?v=20261128b"></script>
+<script src="bingo-core.js?v=20261128b"></script>
+<script src="bingo-sync.js?v=20261128b"></script>
 <style>
 :root {
   --bg: #f3f6f1; --panel: #ffffff; --ink: #1d2a22; --sub: #5a6b60; --line: #d5ded6;
@@ -151,7 +151,7 @@ body.printmode #printView { display: block; }
   <!-- 参加（ログイン） -->
   <section id="joinView" hidden>
     <h1>⛳ ゴルフビンゴ</h1>
-    <p class="sub">名前を入れて「参加する」を押すと、空いている番号のカードがランダムに当たります。16 枚とも中身も並びも違います。</p>
+    <p class="sub">名前を入れて「参加する」を押すと、空いている番号のカードがランダムに当たります。20 枚とも中身も並びも違います。</p>
     <div class="panel">
       <p class="sub" style="margin-top:0">ゲームコード <b id="joinCode"></b></p>
       <div id="joinForm">
@@ -178,7 +178,7 @@ body.printmode #printView { display: block; }
   <!-- 幹事の画面 -->
   <section id="hostView" hidden>
     <h1>⛳ ゴルフビンゴ（幹事）</h1>
-    <p class="sub">16 名それぞれに違うカード。参加した人に、空いている番号のカードがランダムに当たります。</p>
+    <p class="sub">最大 20 名それぞれに違うカード（17 人目からは No.17〜20）。参加した人に、空いている番号のカードがランダムに当たります。</p>
 
     <div class="panel">
       <h2>ゲームコード</h2>
@@ -186,7 +186,7 @@ body.printmode #printView { display: block; }
         <span class="code" id="codeShow"></span>
         <button id="btnNew">新しく作り直す</button>
       </div>
-      <p class="sub">同じコードなら、どのスマホでも同じ 16 枚になります。コンペごとに作り直してください。</p>
+      <p class="sub">同じコードなら、どのスマホでも同じ 20 枚になります。コンペごとに作り直してください。</p>
       <div class="row">
         <input type="text" id="codeInput" placeholder="ほかのコードを開く（例：K7Q2M）" style="max-width:240px">
         <button id="btnOpenCode">開く</button>
@@ -220,7 +220,7 @@ body.printmode #printView { display: block; }
     </div>
 
     <div class="panel">
-      <h2>16 枚の違い</h2>
+      <h2>20 枚の違い</h2>
       <div class="stats" id="stats"></div>
       <p class="sub" id="statsNote"></p>
       <p class="sub">スコア 100 前後の人向け。「ミス」のマス（OB・3パット・空振り など）は、やってしまったら開けます。★の数はむずかしさ。どのカードも、やさしい 8・ミス 7・ふつう（★）6・むずかしい（★★）3 個で、どの列にもやさしいが 1 個以上・むずかしいは 1 個まで・ミスは 3 個までです。誰かがビンゴ・リーチになると全員の画面に速報が出ます。赤い「ミス」のマスをいちばん多く開けた人が「ミス大賞」です。</p>
@@ -291,7 +291,7 @@ body.printmode #printView { display: block; }
 <script>
 (function () {
   "use strict";
-  var B = window.BingoCore, S = window.BingoSync, N = 16;
+  var B = window.BingoCore, S = window.BingoSync, N = 20;
   var COLS = ["G", "O", "L", "F", "★"];
 
   // ---- この端末への保存（使えなくても動く） ----
@@ -412,7 +412,7 @@ body.printmode #printView { display: block; }
         .catch(function () { return {}; })
         .then(function (cards) { return S.join(code, name, key, B.usedByOthers({}, cards, name, N)); })
         .then(function (r) {
-          if (r.full) { done = true; clearTimeout(timer); btn.disabled = false; msg.textContent = "16 名で満員です。幹事に番号を空けてもらってください。"; return; }
+          if (r.full) { done = true; clearTimeout(timer); btn.disabled = false; msg.textContent = N + " 名で満員です。幹事に番号を空けてもらってください。"; return; }
           finish(r.no, r.reused ? "前に参加した No." + r.no + " を開きました。" : "");
         }).catch(function (e) { console.error(e); fail(); });
     };
